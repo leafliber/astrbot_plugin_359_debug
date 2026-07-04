@@ -19,7 +19,7 @@
 """
 from __future__ import annotations
 
-from astrbot.api import star
+from astrbot.api import star, logger
 from astrbot.api.event import filter, AstrMessageEvent
 
 from .debug_359.store import StoreMixin
@@ -65,10 +65,10 @@ class Main(
     async def initialize(self) -> None:
         """插件初始化。"""
         await self._store_initialize()
-        star.logger.info("[359debug] 359度 Debug 已就绪。发送 /debug help 查看指令，"
-                         "WebUI 插件详情查看 360°体检 Dashboard。")
+        logger.info("[359debug] 359度 Debug 已就绪。发送 /debug help 查看指令，"
+                    "WebUI 插件详情查看 360°体检 Dashboard。")
 
     async def terminate(self) -> None:
         """插件卸载。"""
         await self.save_buf_to_kv()
-        star.logger.info("[359debug] 已卸载，统计数据已持久化。")
+        logger.info("[359debug] 已卸载，统计数据已持久化。")
