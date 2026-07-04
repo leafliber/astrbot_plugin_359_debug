@@ -1,6 +1,6 @@
 name: astrbot_plugin_359_debug
-desc: "359度 Debug —— 运行时间 / 错误日志 / Token / 上下文注入 / 工具调用 / 插件安全与冲突 分析工具"
-version: "0.1.0"
-author: 359debug
-repo: ""
-display_name: "359度 Debug"
+desc: "359度Debug —— 运行时间 / 错误日志 / Token / 上下文注入 / 工具调用 / 插件安全与冲突 分析工具"
+version: 0.1.0
+author: Leafiber
+repo: https://github.com/leafliber/astrbot_plugin_359_debug
+display_name: 359度Debug
