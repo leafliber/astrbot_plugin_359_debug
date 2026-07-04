@@ -8,6 +8,7 @@ import {
   Legend,
 } from 'recharts';
 import { useApi } from '../api/bridge';
+import { chartColors } from '../theme-utils';
 
 interface ModelRow {
   key?: string;
@@ -70,6 +71,7 @@ const pct = (v: unknown): string => {
 
 export default function TokenDetail() {
   const { data, loading, error } = useApi<TokenData>('/token');
+  const tc = chartColors();
 
   const byModel = data?.by_model ?? [];
   const pieData = byModel.map((m) => ({
@@ -153,14 +155,14 @@ export default function TokenDetail() {
                       </Pie>
                       <Tooltip
                         contentStyle={{
-                          background: '#16213e',
-                          border: '1px solid #2a2f4e',
+                          background: tc.cardBg,
+                          border: `1px solid ${tc.borderColor}`,
                           borderRadius: '8px',
-                          color: '#e0e0e0',
+                          color: tc.textPrimary,
                           fontSize: 12,
                         }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 11, color: '#a0a8c0' }} />
+                      <Legend wrapperStyle={{ fontSize: 11, color: tc.tickSecondary }} />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
@@ -233,7 +235,7 @@ export default function TokenDetail() {
                 })}
                 {byModel.length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无模型数据
                     </td>
                   </tr>

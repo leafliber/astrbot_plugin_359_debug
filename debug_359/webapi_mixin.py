@@ -25,7 +25,7 @@ class WebApiMixin:
         """注册所有 API 端点。"""
         ctx = self.context
         endpoints = [
-            ("/overview", self._api_overview, ["GET"], "360体检总览"),
+            ("/overview", self._api_overview, ["GET"], "359体检总览"),
             ("/runtime", self._api_runtime, ["GET"], "运行时间详情"),
             ("/token", self._api_token, ["GET"], "Token详情"),
             ("/context", self._api_context, ["GET"], "上下文详情"),
@@ -34,6 +34,8 @@ class WebApiMixin:
             ("/plugin", self._api_plugin, ["GET"], "插件分析详情"),
             ("/settings", self._api_get_settings, ["GET"], "读取配置"),
             ("/settings", self._api_save_settings, ["POST"], "保存配置"),
+            ("/theme", self._api_get_theme, ["GET"], "读取主题"),
+            ("/theme", self._api_save_theme, ["POST"], "保存主题"),
             ("/scan", self._api_scan, ["POST"], "手动触发扫描"),
             ("/live", self._api_live, ["GET"], "实时告警SSE"),
         ]
@@ -48,7 +50,7 @@ class WebApiMixin:
     # ==================== API 端点实现 ====================
 
     async def _api_overview(self) -> Any:
-        """360 体检总览。"""
+        """359 体检总览。"""
         try:
             from quart import jsonify
         except ImportError:
@@ -164,6 +166,21 @@ class WebApiMixin:
             new_config = data.get("config", data)
             updated = await self.update_config(new_config)
             return jsonify({"ok": True, "config": updated})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)})
+
+    async def _api_get_theme(self) -> Any:
+        from quart import jsonify
+        theme = await self.get_theme()
+        return jsonify({"theme": theme})
+
+    async def _api_save_theme(self) -> Any:
+        from quart import jsonify, request
+        try:
+            data = await request.get_json()
+            theme = data.get("theme", "light")
+            saved = await self.save_theme(theme)
+            return jsonify({"ok": True, "theme": saved})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)})
 

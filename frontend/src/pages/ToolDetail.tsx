@@ -10,6 +10,7 @@ import {
   Cell,
 } from 'recharts';
 import { useApi } from '../api/bridge';
+import { chartColors } from '../theme-utils';
 
 interface ToolRank {
   name?: string;
@@ -56,6 +57,7 @@ const pct = (v: unknown): string => {
 
 export default function ToolDetail() {
   const { data, loading, error } = useApi<ToolData>('/tool');
+  const tc = chartColors();
 
   const ranking = data?.ranking ?? data?.by_tool ?? [];
   const trajectories = data?.agent_trajectories ?? [];
@@ -121,28 +123,28 @@ export default function ToolDetail() {
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 10, right: 20, bottom: 40, left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2f4e" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={tc.grid} />
                     <XAxis
                       dataKey="name"
-                      tick={{ fill: '#a0a8c0', fontSize: 11 }}
+                      tick={{ fill: tc.tickSecondary, fontSize: 11 }}
                       angle={-35}
                       textAnchor="end"
                       interval={0}
                     />
-                    <YAxis tick={{ fill: '#6b7390', fontSize: 11 }} />
+                    <YAxis tick={{ fill: tc.tickMuted, fontSize: 11 }} />
                     <Tooltip
-                      cursor={{ fill: 'rgba(76,175,80,0.08)' }}
+                      cursor={{ fill: 'var(--accent-bg)' }}
                       contentStyle={{
-                        background: '#16213e',
-                        border: '1px solid #2a2f4e',
+                        background: tc.cardBg,
+                        border: `1px solid ${tc.borderColor}`,
                         borderRadius: '8px',
-                        color: '#e0e0e0',
+                        color: tc.textPrimary,
                         fontSize: 12,
                       }}
                     />
                     <Bar dataKey="calls" name="调用次数" radius={[4, 4, 0, 0]}>
                       {chartData.map((_, i) => (
-                        <Cell key={i} fill="#4CAF50" />
+                        <Cell key={i} fill={tc.primary} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -185,7 +187,7 @@ export default function ToolDetail() {
                 })}
                 {ranking.length === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无工具数据
                     </td>
                   </tr>

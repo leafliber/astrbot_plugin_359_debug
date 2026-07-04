@@ -8,6 +8,7 @@ import {
   Legend,
 } from 'recharts';
 import { useApi } from '../api/bridge';
+import { chartColors } from '../theme-utils';
 
 interface OutputChain {
   available?: boolean;
@@ -82,6 +83,7 @@ const formatTs = (ts: number | string | undefined): string => {
 
 export default function ContextDetail() {
   const { data, loading, error } = useApi<ContextData>('/context');
+  const tc = chartColors();
 
   const snap = data?.last_snapshot;
   const breakdown = data?.token_breakdown ?? {};
@@ -177,14 +179,14 @@ export default function ContextDetail() {
                       </Pie>
                       <Tooltip
                         contentStyle={{
-                          background: '#16213e',
-                          border: '1px solid #2a2f4e',
+                          background: tc.cardBg,
+                          border: `1px solid ${tc.borderColor}`,
                           borderRadius: '8px',
-                          color: '#e0e0e0',
+                          color: tc.textPrimary,
                           fontSize: 12,
                         }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 11, color: '#a0a8c0' }} />
+                      <Legend wrapperStyle={{ fontSize: 11, color: tc.tickSecondary }} />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
@@ -234,7 +236,7 @@ export default function ContextDetail() {
                   <div className="stat-block__label">是否可用</div>
                   <div
                     className="stat-block__value"
-                    style={{ fontSize: 16, color: outputChain.available ? '#4CAF50' : '#9C27B0' }}
+                    style={{ fontSize: 16, color: outputChain.available ? 'var(--color-primary)' : 'var(--color-info)' }}
                   >
                     {outputChain.available ? '是' : '否'}
                   </div>
@@ -296,7 +298,7 @@ export default function ContextDetail() {
                 })}
                 {history.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无变更历史
                     </td>
                   </tr>

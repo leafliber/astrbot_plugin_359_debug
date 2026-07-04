@@ -113,7 +113,7 @@ export default function RuntimeDetail() {
                 ))}
                 {stages.length === 0 && (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无阶段数据
                     </td>
                   </tr>
@@ -165,7 +165,7 @@ export default function RuntimeDetail() {
                 ))}
                 {providers.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无提供商数据
                     </td>
                   </tr>
@@ -197,7 +197,7 @@ export default function RuntimeDetail() {
                 ))}
                 {platforms.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无平台维度数据
                     </td>
                   </tr>

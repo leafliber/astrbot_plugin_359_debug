@@ -173,7 +173,7 @@ export default function PluginDetail() {
                 ))}
                 {plugins.length === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无插件
                     </td>
                   </tr>
@@ -213,7 +213,7 @@ export default function PluginDetail() {
                 ))}
                 {alerts.length === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       未发现安全风险
                     </td>
                   </tr>
@@ -295,7 +295,7 @@ export default function PluginDetail() {
                 })}
                 {audit.length === 0 && (
                   <tr>
-                    <td colSpan={3} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无审计记录
                     </td>
                   </tr>

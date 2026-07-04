@@ -9,7 +9,7 @@
       Star                      框架基类
 
 六大模块：运行时间 / Token / 上下文注入 / 工具调用 / 错误日志 / 插件安全冲突
-交互双通道：/debug 指令（摘要）+ Pages Dashboard（360°体检完整报告）
+交互双通道：/debug 指令（摘要）+ Pages Dashboard（359°体检完整报告）
 
 钩子签名约束（已核对 ``call_event_hook``）：
 ``on_llm_request`` / ``on_llm_response`` / ``on_waiting_llm_request`` 等事件
@@ -66,7 +66,7 @@ class Main(
         """插件初始化。"""
         await self._store_initialize()
         logger.info("[359debug] 359度 Debug 已就绪。发送 /debug help 查看指令，"
-                    "WebUI 插件详情查看 360°体检 Dashboard。")
+                    "WebUI 插件详情查看 359°体检 Dashboard。")
 
     async def terminate(self) -> None:
         """插件卸载。"""

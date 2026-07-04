@@ -8,7 +8,9 @@ import ToolDetail from './pages/ToolDetail';
 import LogDetail from './pages/LogDetail';
 import PluginDetail from './pages/PluginDetail';
 import Settings from './pages/Settings';
+import ErrorBoundary from './components/ErrorBoundary';
 import { ready } from './api/bridge';
+import { useTheme } from './theme';
 
 /** 导航项配置 */
 const NAV_ITEMS: { to: string; label: string }[] = [
@@ -25,6 +27,7 @@ const NAV_ITEMS: { to: string; label: string }[] = [
 /** 顶部导航布局 */
 function Layout({ children }: { children: React.ReactNode }) {
   const [bridgeReady, setBridgeReady] = useState(false);
+  const { theme, toggle } = useTheme();
 
   useEffect(() => {
     ready()
@@ -38,7 +41,7 @@ function Layout({ children }: { children: React.ReactNode }) {
         <Link to="/" className="app-header__brand">
           <span className="brand-icon">+</span>
           <span>359度 Debug</span>
-          <span className="brand-sub">· 360°体检</span>
+          <span className="brand-sub">· 359°体检</span>
         </Link>
         <nav className="app-header__nav">
           {NAV_ITEMS.map((item) => (
@@ -54,12 +57,24 @@ function Layout({ children }: { children: React.ReactNode }) {
             </NavLink>
           ))}
         </nav>
-        <div className="app-header__status">
-          <span className={'live-dot' + (bridgeReady ? '' : ' offline')} />
-          <span>{bridgeReady ? '已连接' : '连接中'}</span>
+        <div className="app-header__actions">
+          <button
+            className="theme-toggle"
+            onClick={toggle}
+            title={theme === 'light' ? '切换到深色模式' : '切换到浅色模式'}
+            aria-label="切换主题"
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+          <div className="app-header__status">
+            <span className={'live-dot' + (bridgeReady ? '' : ' offline')} />
+            <span>{bridgeReady ? '已连接' : '连接中'}</span>
+          </div>
         </div>
       </header>
-      <main className="app-main">{children}</main>
+      <main className="app-main">
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </main>
     </>
   );
 }

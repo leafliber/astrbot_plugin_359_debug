@@ -1,9 +1,74 @@
 /* ===========================================================================
-   359度 Debug · 360°体检 —— 全局样式
-   深色专业主题 / 卡片化布局 / 响应式网格
+   359度 Debug · 359°体检 —— 全局样式
+   浅色/深色双主题 / 卡片化布局 / 响应式网格
    =========================================================================== */
 
+/* ---- 浅色主题（默认） ---- */
 :root {
+  color-scheme: light;
+  /* 主题色 */
+  --color-primary: #2E7D32;       /* 健康 - 绿 */
+  --color-warning: #E65100;       /* 警告 - 橙 */
+  --color-error: #C62828;         /* 错误 - 红 */
+  --color-info: #1565C0;          /* 信息 - 蓝 */
+
+  /* 背景与表面 */
+  --bg-base: #f0f2f5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f5f7fa;
+  --bg-elevated: #eef1f6;
+  --bg-input: #f8f9fc;
+  --bg-header: rgba(255, 255, 255, 0.92);
+  --table-hover-bg: rgba(0, 0, 0, 0.03);
+
+  /* 文本 */
+  --text-primary: #1a1a2e;
+  --text-secondary: #5a6378;
+  --text-muted: #9aa3b5;
+
+  /* 边框与分割线 */
+  --border-color: #d1d6e0;
+  --border-light: #e4e8f0;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-glow: 0 0 20px rgba(46, 125, 50, 0.12);
+
+  /* 状态半透明背景 */
+  --accent-bg: rgba(46, 125, 50, 0.10);
+  --warning-bg: rgba(230, 81, 0, 0.10);
+  --error-bg: rgba(198, 40, 40, 0.10);
+  --muted-bg: rgba(154, 163, 181, 0.18);
+
+  /* 辅助色 */
+  --link-hover: #1976D2;
+  --on-primary: #ffffff;
+  --primary-hover: #1B5E20;
+  --brand-gradient-end: #1B5E20;
+  --toggle-knob: #ffffff;
+  --severity-high-color: #D32F2F;
+  --scrollbar-hover: #b0b8c8;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* 过渡 */
+  --transition: 0.2s ease;
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono",
+    Menlo, monospace;
+}
+
+/* ---- 深色主题 ---- */
+[data-theme="dark"] {
+  color-scheme: dark;
   /* 主题色 */
   --color-primary: #4CAF50;       /* 健康 - 绿 */
   --color-warning: #FF9800;       /* 警告 - 橙 */
@@ -16,6 +81,8 @@
   --bg-card-hover: #1c2a4a;
   --bg-elevated: #1f2b4d;
   --bg-input: #0f1830;
+  --bg-header: rgba(22, 33, 62, 0.92);
+  --table-hover-bg: rgba(255, 255, 255, 0.025);
 
   /* 文本 */
   --text-primary: #e0e0e0;
@@ -32,19 +99,20 @@
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 20px rgba(76, 175, 80, 0.15);
 
-  /* 圆角 */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  /* 状态半透明背景 */
+  --accent-bg: rgba(76, 175, 80, 0.16);
+  --warning-bg: rgba(255, 152, 0, 0.14);
+  --error-bg: rgba(244, 67, 54, 0.14);
+  --muted-bg: rgba(107, 115, 144, 0.2);
 
-  /* 过渡 */
-  --transition: 0.2s ease;
-
-  /* 字体 */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono",
-    Menlo, monospace;
+  /* 辅助色 */
+  --link-hover: #64b5f6;
+  --on-primary: #ffffff;
+  --primary-hover: #43a047;
+  --brand-gradient-end: #2e7d32;
+  --toggle-knob: #ffffff;
+  --severity-high-color: #ff5252;
+  --scrollbar-hover: #3a4068;
 }
 
 /* ---- 重置 ---- */
@@ -82,7 +150,7 @@ a {
 }
 
 a:hover {
-  color: #64b5f6;
+  color: var(--link-hover);
 }
 
 button {
@@ -109,7 +177,7 @@ button {
   gap: 24px;
   padding: 0 28px;
   height: 60px;
-  background: rgba(22, 33, 62, 0.92);
+  background: var(--bg-header);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border-color);
   box-shadow: var(--shadow-md);
@@ -132,7 +200,7 @@ button {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), #2e7d32);
+  background: linear-gradient(135deg, var(--color-primary), var(--brand-gradient-end));
   font-size: 16px;
   box-shadow: var(--shadow-glow);
 }
@@ -168,9 +236,35 @@ button {
 }
 
 .nav-link.active {
-  background: rgba(76, 175, 80, 0.16);
+  background: var(--accent-bg);
   color: var(--color-primary);
   font-weight: 600;
+}
+
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-size: 18px;
+  line-height: 1;
+  transition: all var(--transition);
+}
+
+.theme-toggle:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--color-primary);
 }
 
 .app-header__status {
@@ -336,17 +430,17 @@ button {
 
 .health-score__level.good {
   color: var(--color-primary);
-  background: rgba(76, 175, 80, 0.14);
+  background: var(--accent-bg);
 }
 
 .health-score__level.warn {
   color: var(--color-warning);
-  background: rgba(255, 152, 0, 0.14);
+  background: var(--warning-bg);
 }
 
 .health-score__level.bad {
   color: var(--color-error);
-  background: rgba(244, 67, 54, 0.14);
+  background: var(--error-bg);
 }
 
 .health-score__wrapper {
@@ -486,7 +580,7 @@ button {
 }
 
 .checkup-card__link:hover {
-  color: #64b5f6;
+  color: var(--link-hover);
 }
 
 /* 状态徽章 */
@@ -510,17 +604,17 @@ button {
 
 .status-badge.ok {
   color: var(--color-primary);
-  background: rgba(76, 175, 80, 0.14);
+  background: var(--accent-bg);
 }
 
 .status-badge.warn {
   color: var(--color-warning);
-  background: rgba(255, 152, 0, 0.14);
+  background: var(--warning-bg);
 }
 
 .status-badge.error {
   color: var(--color-error);
-  background: rgba(244, 67, 54, 0.14);
+  background: var(--error-bg);
 }
 
 /* ===========================================================================
@@ -649,7 +743,7 @@ table.data-table tbody tr {
 }
 
 table.data-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--table-hover-bg);
 }
 
 table.data-table tbody tr:last-child td {
@@ -829,7 +923,7 @@ table.data-table .cell-error  { color: var(--color-error); }
   width: 18px;
   left: 3px;
   bottom: 3px;
-  background: #fff;
+  background: var(--toggle-knob);
   border-radius: 50%;
   transition: var(--transition);
 }
@@ -897,11 +991,11 @@ table.data-table .cell-error  { color: var(--color-error); }
 
 .btn-primary {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .btn-primary:hover {
-  background: #43a047;
+  background: var(--primary-hover);
   box-shadow: var(--shadow-glow);
 }
 
@@ -929,15 +1023,15 @@ table.data-table .cell-error  { color: var(--color-error); }
 }
 
 .feedback.success {
-  background: rgba(76, 175, 80, 0.12);
+  background: var(--accent-bg);
   color: var(--color-primary);
-  border: 1px solid rgba(76, 175, 80, 0.3);
+  border: 1px solid var(--color-primary);
 }
 
 .feedback.error {
-  background: rgba(244, 67, 54, 0.12);
+  background: var(--error-bg);
   color: var(--color-error);
-  border: 1px solid rgba(244, 67, 54, 0.3);
+  border: 1px solid var(--color-error);
 }
 
 /* ===========================================================================
@@ -985,14 +1079,14 @@ table.data-table .cell-error  { color: var(--color-error); }
 }
 
 .alert-banner.warning {
-  background: rgba(255, 152, 0, 0.1);
-  border: 1px solid rgba(255, 152, 0, 0.3);
+  background: var(--warning-bg);
+  border: 1px solid var(--color-warning);
   color: var(--color-warning);
 }
 
 .alert-banner.error {
-  background: rgba(244, 67, 54, 0.1);
-  border: 1px solid rgba(244, 67, 54, 0.3);
+  background: var(--error-bg);
+  border: 1px solid var(--color-error);
   color: var(--color-error);
 }
 
@@ -1056,17 +1150,17 @@ table.data-table .cell-error  { color: var(--color-error); }
 }
 
 .tag.active {
-  background: rgba(76, 175, 80, 0.16);
+  background: var(--accent-bg);
   color: var(--color-primary);
 }
 
 .tag.inactive {
-  background: rgba(107, 115, 144, 0.2);
+  background: var(--muted-bg);
   color: var(--text-muted);
 }
 
 .severity-critical { color: var(--color-error); font-weight: 700; }
-.severity-high     { color: #ff5252; font-weight: 600; }
+.severity-high     { color: var(--severity-high-color); font-weight: 600; }
 .severity-medium   { color: var(--color-warning); font-weight: 600; }
 .severity-low      { color: var(--text-secondary); }
 
@@ -1086,5 +1180,5 @@ table.data-table .cell-error  { color: var(--color-error); }
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a4068;
+  background: var(--scrollbar-hover);
 }

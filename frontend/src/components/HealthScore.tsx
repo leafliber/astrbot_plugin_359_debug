@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { cssVar } from '../theme-utils';
 
 export interface HealthScoreProps {
   /** 健康分数 0-100 */
@@ -10,11 +11,11 @@ export interface HealthScoreProps {
 const RADIUS = 78;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-/** 根据分数返回对应颜色 */
+/** 根据分数返回对应颜色（读取主题变量） */
 function colorForScore(score: number): string {
-  if (score >= 80) return '#4CAF50';
-  if (score >= 60) return '#FF9800';
-  return '#f44336';
+  if (score >= 80) return cssVar('--color-primary', '#4CAF50');
+  if (score >= 60) return cssVar('--color-warning', '#FF9800');
+  return cssVar('--color-error', '#f44336');
 }
 
 /** 根据分数返回等级样式类 */

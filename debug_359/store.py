@@ -93,6 +93,27 @@ class StoreMixin:
         except Exception:
             pass
 
+    # ==================== 主题持久化 ====================
+
+    async def get_theme(self) -> str:
+        """读取持久化的主题设置，默认 light。"""
+        try:
+            saved = await self.get_kv_data("ui_theme", None)
+            if saved in ("light", "dark"):
+                return saved
+        except Exception:
+            pass
+        return "light"
+
+    async def save_theme(self, theme: str) -> str:
+        """持久化主题设置并返回最终值。"""
+        theme = theme if theme in ("light", "dark") else "light"
+        try:
+            await self.put_kv_data("ui_theme", theme)
+        except Exception as e:
+            logger.warning(f"[359debug] 主题持久化失败: {e}")
+        return theme
+
     # ==================== DB 查询封装 ====================
 
     def _get_db(self):

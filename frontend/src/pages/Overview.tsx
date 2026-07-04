@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApi, subscribeSSE } from '../api/bridge';
 import HealthScore from '../components/HealthScore';
 import RadarChart, { RadarData } from '../components/RadarChart';
@@ -53,7 +53,6 @@ function ErrorBox({ message }: { message: string }) {
 export default function Overview() {
   const { data, loading, error, refresh } = useApi<OverviewData>('/overview');
   const [alerts, setAlerts] = useState<TimelineItem[]>([]);
-  const unsubRef = useRef<(() => void) | null>(null);
 
   // 初始化告警列表
   useEffect(() => {
@@ -64,28 +63,44 @@ export default function Overview() {
 
   // 订阅实时告警
   useEffect(() => {
-    const unsubscribe = subscribeSSE(
-      '/live',
-      {
-        onMessage: (msg: any) => {
-          const item: TimelineItem = {
-            ts: msg.ts ?? msg.time ?? Date.now(),
-            level: msg.level ?? 'INFO',
-            source: msg.source ?? 'system',
-            msg: msg.msg ?? msg.message ?? '',
-            module: msg.module,
-          };
-          setAlerts((prev) => [item, ...prev].slice(0, 100));
+    let unsubscribe: (() => void) | null = null;
+    let cancelled = false;
+    try {
+      const fn = subscribeSSE(
+        '/live',
+        {
+          onMessage: (msg: any) => {
+            const item: TimelineItem = {
+              ts: msg.ts ?? msg.time ?? Date.now(),
+              level: msg.level ?? 'INFO',
+              source: msg.source ?? 'system',
+              msg: msg.msg ?? msg.message ?? '',
+              module: msg.module,
+            };
+            setAlerts((prev) => [item, ...prev].slice(0, 100));
+          },
+          onError: () => {
+            /* 静默处理，避免控制台噪音 */
+          },
         },
-        onError: () => {
-          /* 静默处理，避免控制台噪音 */
-        },
-      },
-      { topic: 'alert' }
-    );
-    unsubRef.current = unsubscribe;
+        { topic: 'alert' }
+      );
+      if (typeof fn === 'function') {
+        unsubscribe = fn;
+      }
+    } catch {
+      /* subscribeSSE 可能因 bridge 未就绪而抛出，忽略 */
+    }
     return () => {
-      if (unsubRef.current) unsubRef.current();
+      cancelled = true;
+      // 防御性调用：确保 unsubscribe 是函数才执行
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch {
+          /* 卸载期间 bridge 可能已失效，静默吞掉 */
+        }
+      }
     };
   }, []);
 
@@ -118,7 +133,7 @@ export default function Overview() {
 
   return (
     <div>
-      <h1 className="page-title">360° 体检总览</h1>
+      <h1 className="page-title">359° 体检总览</h1>
       <p className="page-subtitle">
         全方位监测 AstrBot 运行健康度 · 实时告警推送中
       </p>

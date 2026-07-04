@@ -107,7 +107,7 @@ export default function LogDetail() {
 
           {/* 日志文件路径 */}
           {fileEnabled && data?.file_path && (
-            <div className="alert-banner" style={{ background: 'rgba(100, 116, 139, 0.08)' }}>
+            <div className="alert-banner" style={{ background: 'var(--muted-bg)' }}>
               📄 日志文件：<span className="text-mono">{data.file_path}</span>
             </div>
           )}
@@ -176,7 +176,7 @@ export default function LogDetail() {
                 ))}
                 {filteredEntries.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无匹配的日志条目
                     </td>
                   </tr>
@@ -212,7 +212,7 @@ export default function LogDetail() {
                 ))}
                 {clusters.length === 0 && (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: '#6b7390' }}>
+                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       未发现错误聚类
                     </td>
                   </tr>

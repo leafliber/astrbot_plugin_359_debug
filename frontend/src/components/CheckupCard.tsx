@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { cssVar } from '../theme-utils';
 
 export type CheckupStatus = 'ok' | 'warn' | 'error';
 
@@ -24,9 +25,9 @@ const STATUS_LABEL: Record<CheckupStatus, string> = {
 };
 
 function scoreColor(score: number): string {
-  if (score >= 80) return '#4CAF50';
-  if (score >= 60) return '#FF9800';
-  return '#f44336';
+  if (score >= 80) return cssVar('--color-primary', '#4CAF50');
+  if (score >= 60) return cssVar('--color-warning', '#FF9800');
+  return cssVar('--color-error', '#f44336');
 }
 
 export default function CheckupCard({
@@ -48,7 +49,7 @@ export default function CheckupCard({
       </div>
       <div className="checkup-card__score" style={{ color: scoreColor(score) }}>
         {Math.round(score)}
-        <span style={{ fontSize: 13, color: '#6b7390', fontWeight: 400 }}>
+        <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>
           {' '}
           / 100
         </span>
