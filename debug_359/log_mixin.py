@@ -54,23 +54,70 @@ class LogMixin:
             return []
 
     def _lg_parse_line(self, line: str) -> dict | None:
-        """解析 loguru 格式日志行，提取级别/时间/内容。"""
+        """解析 AstrBot 标准 logging 格式日志行，提取级别/时间/内容。
+
+        AstrBot 日志格式（log.py LogManager._add_file_handler）：
+          [时间] [plugin_tag] [LEVEL][version_tag] [filename:lineno]: message
+        示例：
+          [2024-01-01 12:00:00] [INFO] [core.py:123]: 消息内容
+          [2024-01-01 12:00:00] [my_plugin] [INFO][v4.26] [handler.py:45]: 消息
+        同时兼容 loguru 等其他常见格式作为回退。
+        """
         line = line.strip()
         if not line:
             return None
-        # loguru 格式: 2024-01-01 12:00:00 [LEVEL] module - message
+
+        # 方案1：AstrBot 标准格式
+        # [时间] (可选 [tag]...） [LEVEL](可选 [version]) [file:line]: message
+        m = re.match(
+            r"\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\]"    # [时间]
+            r"(?:\s*\[[^\]]*\])*?"                                # 可选的 [tag]
+            r"\s*\[(\w+)\]"                                       # [LEVEL]
+            r"(?:\[[^\]]*\])?"                                    # 可选 [version]
+            r"\s*\[([^\]:]+):(\d+)\]:"                            # [file:line]:
+            r"\s*(.+)",                                           # message
+            line,
+        )
+        if m:
+            return {
+                "time": m.group(1),
+                "level": m.group(2).upper(),
+                "module": f"{m.group(3)}:{m.group(4)}",
+                "msg": m.group(5)[:500],
+            }
+
+        # 方案2：AstrBot 无文件位置的简化格式
+        # [时间] ... [LEVEL]: message
+        m = re.match(
+            r"\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\]"
+            r"(?:\s*\[[^\]]*\])*?"
+            r"\s*\[(\w+)\]"
+            r"(?:[^\]]*\])?"
+            r"[:\s]*(.+)",
+            line,
+        )
+        if m:
+            return {
+                "time": m.group(1),
+                "level": m.group(2).upper(),
+                "module": "",
+                "msg": m.group(3)[:500],
+            }
+
+        # 方案3：loguru 风格回退（旧格式兼容）
         m = re.match(
             r"(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s*\[(\w+)\]\s*(.+?)\s*-\s*(.+)",
             line,
         )
         if m:
             return {
-                "time": m.group(1), "level": m.group(2),
+                "time": m.group(1), "level": m.group(2).upper(),
                 "module": m.group(3), "msg": m.group(4)[:500],
             }
-        # 简单级别匹配
-        for level in ("ERROR", "CRITICAL", "WARNING", "WARN"):
-            if f" {level} " in line or f"[{level}]" in line:
+
+        # 方案4：简单级别匹配（无时间戳的行）
+        for level in ("ERROR", "CRITICAL", "WARNING", "WARN", "INFO", "DEBUG"):
+            if f"[{level}]" in line:
                 return {"time": "", "level": level, "module": "", "msg": line[:500]}
         return None
 
@@ -115,13 +162,22 @@ class LogMixin:
                 clusters[fp] = {"fingerprint": fp, "count": 0, "sample": e, "level": e.get("level")}
             clusters[fp]["count"] += 1
         cluster_list = sorted(clusters.values(), key=lambda x: -x["count"])[:20]
+
+        # 生成提示信息
+        if file_exists:
+            hint = ""
+        elif self.is_log_file_enabled():
+            hint = f"日志文件已启用但未找到：{log_path}（请检查路径配置）"
+        else:
+            hint = "日志文件未开启，请在面板开启 log_file_enable"
+
         return {
             "entries": all_entries,
             "clusters": cluster_list,
             "total_by_level": dict(by_level),
             "file_available": file_exists,
             "file_path": log_path,
-            "hint": "" if file_exists else "日志文件未开启，请在面板开启 log_file_enable",
+            "hint": hint,
         }
 
     def get_log_health(self) -> int:
@@ -131,7 +187,7 @@ class LogMixin:
         log_path = self.get_log_file_path()
         if os.path.isfile(log_path):
             lines = self._lg_tail_file(log_path, 500)
-            file_errors = sum(1 for l in lines if " ERROR " in l or " CRITICAL " in l)
+            file_errors = sum(1 for l in lines if "[ERROR]" in l or "[CRITICAL]" in l)
             total_errors = len(entries) + file_errors
         else:
             total_errors = len(entries)
@@ -147,9 +203,9 @@ class LogMixin:
         if os.path.isfile(log_path):
             lines = self._lg_tail_file(log_path, 500)
             for l in lines:
-                if " ERROR " in l or " CRITICAL " in l:
+                if "[ERROR]" in l or "[CRITICAL]" in l:
                     err_count += 1
-                elif " WARNING " in l:
+                elif "[WARNING]" in l or "[WARN]" in l:
                     warn_count += 1
         if err_count == 0 and warn_count == 0:
             return "日志 ▸ 无异常 | 完整报告见 Pages"

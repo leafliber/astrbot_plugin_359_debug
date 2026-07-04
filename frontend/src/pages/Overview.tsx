@@ -133,23 +133,23 @@ export default function Overview() {
 
   return (
     <div>
-      <h1 className="page-title">359° 体检总览</h1>
-      <p className="page-subtitle">
+      <h1 className="page-title anim-fade-up">359° 体检总览</h1>
+      <p className="page-subtitle anim-fade-up delay-1">
         全方位监测 AstrBot 运行健康度 · 实时告警推送中
       </p>
 
       {error && (
-        <div className="alert-banner warning">
+        <div className="alert-banner warning anim-fade">
           部分数据加载失败（{error}），展示的可能不是最新结果。
         </div>
       )}
 
       {/* 顶部：健康分 + 雷达图 */}
       <div className="overview-top">
-        <div className="card">
+        <div className="card anim-scale">
           <HealthScore score={score} level={level} />
         </div>
-        <div className="card">
+        <div className="card anim-fade-up delay-2">
           <div className="card__title">六维健康雷达</div>
           <RadarChart data={radar} />
         </div>
@@ -158,16 +158,17 @@ export default function Overview() {
       {/* 中部：模块卡片网格 */}
       <h2 className="section-title">模块体检</h2>
       <div className="checkup-grid">
-        {renderModules.map((m) => (
-          <CheckupCard
-            key={m.key}
-            title={m.title}
-            score={m.score}
-            summary={m.summary}
-            status={m.status}
-            detailRoute={m.detailRoute}
-            icon={m.icon}
-          />
+        {renderModules.map((m, i) => (
+          <div key={m.key} className={'anim-fade-up delay-' + Math.min(i + 1, 8)}>
+            <CheckupCard
+              title={m.title}
+              score={m.score}
+              summary={m.summary}
+              status={m.status}
+              detailRoute={m.detailRoute}
+              icon={m.icon}
+            />
+          </div>
         ))}
       </div>
 
@@ -182,7 +183,7 @@ export default function Overview() {
           刷新
         </button>
       </h2>
-      <div className="card">
+      <div className="card anim-fade-up">
         <Timeline items={alerts} />
       </div>
     </div>

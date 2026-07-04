@@ -123,7 +123,6 @@ class WebApiMixin:
         since = float(request.args.get("since", 0)) or None
         group_by = request.args.get("group_by", "model")
         report = await self.get_token_report(provider=provider, since=since, group_by=group_by)
-        report["cost_estimate"] = self.get_cost_estimate()
         return jsonify(report)
 
     async def _api_context(self) -> Any:
@@ -153,11 +152,7 @@ class WebApiMixin:
 
     async def _api_get_settings(self) -> Any:
         from quart import jsonify
-        # 排除敏感配置
-        safe_cfg = {k: v for k, v in self._cfg.items()
-                    if k not in ("model_pricing",)}
-        safe_cfg["model_pricing"] = self._cfg.get("model_pricing", {})
-        return jsonify({"config": safe_cfg})
+        return jsonify({"config": dict(self._cfg)})
 
     async def _api_save_settings(self) -> Any:
         from quart import jsonify, request

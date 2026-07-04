@@ -490,6 +490,11 @@ button {
   gap: 18px;
 }
 
+/* 动画包裹层撑满网格单元 */
+.checkup-grid > div {
+  display: flex;
+}
+
 .checkup-card {
   display: flex;
   flex-direction: column;
@@ -503,6 +508,7 @@ button {
   transition: all var(--transition);
   text-decoration: none;
   color: inherit;
+  width: 100%;
 }
 
 .checkup-card:hover {
@@ -1182,3 +1188,198 @@ table.data-table .cell-error  { color: var(--color-error); }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
 }
+
+/* ===========================================================================
+   动画系统 · 入场与交互
+   =========================================================================== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* 入场动画工具类 */
+.anim-fade-up {
+  animation: fadeInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.anim-fade {
+  animation: fadeIn 0.4s ease both;
+}
+
+.anim-scale {
+  animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.anim-slide-left {
+  animation: slideInLeft 0.4s ease both;
+}
+
+/* 错峰延迟 */
+.delay-1 { animation-delay: 0.05s; }
+.delay-2 { animation-delay: 0.10s; }
+.delay-3 { animation-delay: 0.15s; }
+.delay-4 { animation-delay: 0.20s; }
+.delay-5 { animation-delay: 0.25s; }
+.delay-6 { animation-delay: 0.30s; }
+.delay-7 { animation-delay: 0.35s; }
+.delay-8 { animation-delay: 0.40s; }
+
+/* 尊重用户的动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===========================================================================
+   视觉优化 · 统一与舒适度提升
+   =========================================================================== */
+
+/* 页面标题渐变装饰条 */
+.page-title {
+  position: relative;
+}
+
+/* 卡片悬停增强：更柔和的浮起效果 */
+.card {
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--border-color),
+    transparent
+  );
+  opacity: 0.6;
+}
+
+/* 体检卡片悬停：柔和浮起 + 边框高亮 */
+.checkup-card {
+  will-change: transform;
+}
+
+.checkup-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 健康分环形：添加柔和外发光 */
+.health-score__wrapper {
+  filter: drop-shadow(0 4px 12px var(--accent-bg));
+}
+
+/* 统计块悬停反馈 */
+.stat-block {
+  transition: all var(--transition);
+}
+
+.stat-block:hover {
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+/* 导航链接活跃态下划线 */
+.nav-link {
+  position: relative;
+}
+
+.nav-link.active::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-primary);
+  opacity: 0.5;
+}
+
+/* 章节标题入场 */
+.section-title {
+  animation: fadeInUp 0.4s ease both;
+}
+
+/* 时间线条目入场 */
+.timeline-item {
+  animation: fadeIn 0.3s ease both;
+}
+
+/* 表格行悬停平滑过渡 */
+table.data-table tbody tr {
+  transition: background var(--transition);
+}
+
+/* 按钮交互增强 */
+.btn {
+  transition: all var(--transition);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+/* 输入框聚焦高亮 */
+.input {
+  transition: all var(--transition);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+

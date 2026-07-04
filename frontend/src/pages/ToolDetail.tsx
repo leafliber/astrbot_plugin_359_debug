@@ -196,8 +196,8 @@ export default function ToolDetail() {
             </table>
           </div>
 
-          {/* Agent 轨迹 */}
-          <h2 className="section-title">Agent 轨迹 (F7)</h2>
+          {/* Agent 调用轨迹 */}
+          <h2 className="section-title">Agent 调用轨迹</h2>
           {trajectories.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {trajectories.map((tr, i) => {

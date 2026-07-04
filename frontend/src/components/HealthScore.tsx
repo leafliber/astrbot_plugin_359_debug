@@ -28,13 +28,37 @@ function levelClass(score: number): string {
 export default function HealthScore({ score, level }: HealthScoreProps) {
   const clamped = Math.max(0, Math.min(100, score || 0));
   const [offset, setOffset] = useState(CIRCUMFERENCE);
+  const [displayScore, setDisplayScore] = useState(0);
   const color = colorForScore(clamped);
 
-  // 进入时动画
+  // 环形进度动画
   useEffect(() => {
     const target = CIRCUMFERENCE - (clamped / 100) * CIRCUMFERENCE;
     const timer = setTimeout(() => setOffset(target), 80);
     return () => clearTimeout(timer);
+  }, [clamped]);
+
+  // 数字递增动画（与环形同步）
+  useEffect(() => {
+    if (clamped <= 0) {
+      setDisplayScore(0);
+      return;
+    }
+    const duration = 1100;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      // easeOutCubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayScore(Math.round(eased * clamped));
+      if (progress < 1) {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [clamped]);
 
   return (
@@ -59,7 +83,7 @@ export default function HealthScore({ score, level }: HealthScoreProps) {
         </svg>
         <div className="health-score__center">
           <div className="health-score__value" style={{ color }}>
-            {Math.round(clamped)}
+            {displayScore}
           </div>
           <div className="health-score__label">健康分</div>
         </div>

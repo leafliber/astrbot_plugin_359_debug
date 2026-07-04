@@ -21,13 +21,6 @@ interface ModelRow {
   failure_rate?: number;
 }
 
-interface CostData {
-  available?: boolean;
-  total?: number;
-  input?: number;
-  output?: number;
-  msg?: string;
-}
 interface TotalData {
   calls?: number;
   input_other?: number;
@@ -39,7 +32,6 @@ interface TokenData {
   total?: TotalData;
   cache_hit_ratio?: number;
   by_model?: ModelRow[];
-  cost_estimate?: CostData;
   source?: string;
 }
 
@@ -53,13 +45,6 @@ const fmt = (v: unknown): string => {
   const n = Number(v);
   if (isNaN(n)) return String(v);
   return n.toLocaleString('zh-CN');
-};
-
-const fmtCost = (v: unknown): string => {
-  if (v === null || v === undefined || v === '') return '-';
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return '$' + n.toFixed(4);
 };
 
 const pct = (v: unknown): string => {
@@ -80,15 +65,12 @@ export default function TokenDetail() {
   }));
   const cacheRatio = data?.cache_hit_ratio ?? 0;
   const totalInfo = data?.total;
-  const costInfo = data?.cost_estimate;
-  const costTotal = costInfo?.available ? (costInfo.total ?? 0) : 0;
-  const costAvailable = costInfo?.available ?? false;
 
   return (
     <div>
       <Link to="/" className="page-back">← 返回</Link>
       <h1 className="page-title">🪙 Token 用量分析</h1>
-      <p className="page-subtitle">模型调用量、Token 消耗与成本估算</p>
+      <p className="page-subtitle">模型调用量、Token 消耗与缓存命中</p>
 
       {loading && (
         <div className="state-box">
@@ -116,15 +98,12 @@ export default function TokenDetail() {
               <div className="stat-block__value">{fmt(totalInfo?.total)}</div>
             </div>
             <div className="stat-block">
-              <div className="stat-block__label">缓存命中率</div>
-              <div className="stat-block__value text-primary">{pct(cacheRatio)}</div>
+              <div className="stat-block__label">缓存命中</div>
+              <div className="stat-block__value text-primary">{fmt(totalInfo?.input_cached)}</div>
             </div>
             <div className="stat-block">
-              <div className="stat-block__label">预估成本</div>
-              <div className="stat-block__value text-warning">
-                {costAvailable ? fmtCost(costTotal) : '未配置'}
-              </div>
-              <div className="stat-block__sub">{costAvailable ? 'USD' : '见设置'}</div>
+              <div className="stat-block__label">缓存命中率</div>
+              <div className="stat-block__value text-primary">{pct(cacheRatio)}</div>
             </div>
           </div>
 
@@ -171,33 +150,33 @@ export default function TokenDetail() {
               </div>
             </div>
 
-            {/* 成本估算 */}
+            {/* 缓存分析 */}
             <div className="card">
-              <div className="card__title">成本估算</div>
-              {costAvailable ? (
-                <>
-                  <div style={{ fontSize: 13, marginBottom: 12 }}>
-                    总预估成本：
-                    <span className="text-warning" style={{ fontSize: 20, fontWeight: 700, marginLeft: 8 }}>
-                      {fmtCost(costTotal)} USD
-                    </span>
-                  </div>
-                  <div className="stat-grid">
-                    <div className="stat-block">
-                      <div className="stat-block__label">输入成本</div>
-                      <div className="stat-block__value">{fmtCost(costInfo?.input)}</div>
-                    </div>
-                    <div className="stat-block">
-                      <div className="stat-block__label">输出成本</div>
-                      <div className="stat-block__value">{fmtCost(costInfo?.output)}</div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="timeline-empty">
-                  {costInfo?.msg ?? '请在设置页配置 model_pricing 单价表'}
+              <div className="card__title">缓存命中分析</div>
+              <div style={{ fontSize: 13, marginBottom: 12 }}>
+                整体缓存命中率：
+                <span className="text-primary" style={{ fontSize: 24, fontWeight: 700, marginLeft: 8 }}>
+                  {pct(cacheRatio)}
+                </span>
+              </div>
+              <p className="form-row__desc" style={{ lineHeight: 1.7 }}>
+                缓存命中可显著降低 Token 消耗与响应延迟。
+                命中率越高代表 Prompt 前缀越稳定，系统提示词缓存复用效果越好。
+              </p>
+              <div className="stat-grid" style={{ marginTop: 16 }}>
+                <div className="stat-block">
+                  <div className="stat-block__label">输入（未缓存）</div>
+                  <div className="stat-block__value">{fmt(totalInfo?.input_other)}</div>
                 </div>
-              )}
+                <div className="stat-block">
+                  <div className="stat-block__label">输入（已缓存）</div>
+                  <div className="stat-block__value cell-good">{fmt(totalInfo?.input_cached)}</div>
+                </div>
+                <div className="stat-block">
+                  <div className="stat-block__label">输出</div>
+                  <div className="stat-block__value">{fmt(totalInfo?.output)}</div>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -36,7 +36,6 @@ class StoreMixin:
         "slow_response_threshold": 10.0,
         "token_alert_threshold": 10000,
         "cache_disruption_rounds": 3,
-        "model_pricing": {},
     }
 
     def __init__(self, *args, **kwargs) -> None:
@@ -319,13 +318,65 @@ class StoreMixin:
     # ==================== 日志文件路径 ====================
 
     def get_log_file_path(self) -> str:
-        """解析 astrbot.log 文件路径。"""
+        """解析 astrbot.log 文件路径。
+
+        按可靠性依次尝试三种方案：
+        1. 从 logging 的 FileHandler 获取实际写入路径（最准确）
+        2. 使用 AstrBot 官方 get_astrbot_data_path() 解析
+        3. 最终回退到 cwd/data/logs/astrbot.log
+
+        AstrBot 的日志路径解析逻辑：
+          get_astrbot_data_path() = <ASTRBOT_ROOT 或 cwd>/data
+          完整路径 = get_astrbot_data_path() / log_file_path
+          (如配置 "logs/astrbot.log" → <cwd>/data/logs/astrbot.log)
+        """
+        import logging
+
+        # 方案1：从 astrbot logger 的文件 handler 获取真实路径
+        # LogManager 会把带 _astrbot_file_handler 标记的 RotatingFileHandler
+        # 挂载到 logger 上，handler.baseFilename 就是日志实际写入路径。
         try:
-            rel = self.context.get_config().get("log_file_path", "logs/astrbot.log")
+            ab_logger = logging.getLogger("astrbot")
+            for h in ab_logger.handlers:
+                # 优先匹配主日志 handler（排除 trace handler）
+                if getattr(h, "_astrbot_file_handler", False):
+                    base = getattr(h, "baseFilename", None)
+                    if base:
+                        return base
+            # 次选：任何带 baseFilename 的非 trace handler
+            for h in ab_logger.handlers:
+                base = getattr(h, "baseFilename", None)
+                if base and ".trace." not in base:
+                    return base
         except Exception:
-            rel = "logs/astrbot.log"
-        base = os.environ.get("ASTRBOT_DATA_PATH") or os.getcwd()
-        return os.path.join(base, rel)
+            pass
+
+        # 方案2：使用 AstrBot 官方路径解析
+        try:
+            from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+            try:
+                rel = self.context.get_config().get("log_file_path", "logs/astrbot.log")
+            except Exception:
+                rel = "logs/astrbot.log"
+            if os.path.isabs(rel):
+                return rel
+            return os.path.join(get_astrbot_data_path(), rel)
+        except Exception:
+            pass
+
+        # 方案3：最终回退（cwd/data/logs/astrbot.log）
+        return os.path.join(os.getcwd(), "data", "logs", "astrbot.log")
+
+    def is_log_file_enabled(self) -> bool:
+        """检查 AstrBot 是否启用了日志文件记录。"""
+        try:
+            cfg = self.context.get_config()
+            # 兼容新版平铺配置和旧版嵌套配置
+            if "log_file" in cfg:
+                return bool((cfg.get("log_file") or {}).get("enable", False))
+            return bool(cfg.get("log_file_enable", False))
+        except Exception:
+            return False
 
     def get_trace_log_path(self) -> str:
         """解析 trace 日志路径。"""

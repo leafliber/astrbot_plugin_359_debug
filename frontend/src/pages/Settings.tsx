@@ -1,212 +1,216 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useApi, apiPost } from '../api/bridge';
 
-interface SettingsData {
-  // 启用开关
-  enable_runtime_analysis?: boolean;
-  enable_token_analysis?: boolean;
-  enable_context_dump?: boolean;
-  enable_tool_analysis?: boolean;
-  enable_log_analysis?: boolean;
-  enable_plugin_analysis?: boolean;
-  [key: string]: any;
+interface PluginConfig {
+  runtime_enabled: boolean;
+  runtime_alert_threshold: number;
+  runtime_dump_root: string;
+  token_enabled: boolean;
+  token_alert_threshold: number;
+  context_enabled: boolean;
+  cache_disruption_rounds: number;
+  tool_enabled: boolean;
+  log_enabled: boolean;
+  log_dump_root: string;
+  plugin_enabled: boolean;
+  plugin_analysis_enabled: boolean;
 }
 
-interface Feedback {
-  type: 'success' | 'error';
-  message: string;
-}
-
-/** 所有 enable_* 开关的元数据 */
-const TOGGLE_FIELDS: { key: string; label: string; desc: string }[] = [
-  { key: 'enable_runtime_analysis', label: '运行时分析', desc: '采集请求各阶段耗时指标' },
-  { key: 'enable_token_analysis', label: 'Token 统计', desc: '统计模型 Token 用量与成本' },
-  { key: 'enable_context_dump', label: '上下文注入', desc: '记录 Prompt 构成与变更' },
-  { key: 'enable_tool_analysis', label: '工具调用', desc: '记录工具调用频率与轨迹' },
-  { key: 'enable_log_analysis', label: '错误日志', desc: '聚合错误日志与聚类分析' },
-  { key: 'enable_plugin_analysis', label: '插件分析', desc: '插件安全审计与冲突检测' },
-];
-
-/** 数值阈值字段 */
-const NUMBER_FIELDS: { key: string; label: string; desc: string; min: number; step: number }[] = [
-  { key: 'slow_response_threshold', label: '慢响应阈值', desc: '超过该耗时(ms)标记为慢响应', min: 0, step: 100 },
-  { key: 'token_alert_threshold', label: 'Token 告警阈值', desc: '单次请求 Token 超过该值告警', min: 0, step: 1000 },
-  { key: 'cache_disruption_rounds', label: '缓存中断轮次', desc: '连续中断多少轮后告警', min: 1, step: 1 },
-  { key: 'log_tail_lines', label: '日志尾部行数', desc: '读取日志文件的尾部行数', min: 10, step: 50 },
-];
+const MODULES = [
+  { key: 'runtime_enabled', title: '运行时监控', desc: '采集请求阶段、LLM 耗时等指标' },
+  { key: 'token_enabled', title: 'Token 统计', desc: '统计模型 Token 用量与缓存命中' },
+  { key: 'context_enabled', title: '上下文追踪', desc: 'Prompt 变更历史、缓存命中检测' },
+  { key: 'tool_enabled', title: '工具调用监控', desc: '函数调用统计与 Agent 轨迹' },
+  { key: 'log_enabled', title: '日志分析', desc: '错误聚类、堆栈提取' },
+  { key: 'plugin_enabled', title: '插件健康', desc: '插件冲突检测与生命周期审计' },
+] as const;
 
 export default function Settings() {
-  const { data, loading, error, refresh } = useApi<{ config: SettingsData }>('/settings');
-  // 后端返回 { config: { ... } }，这里解包出实际配置
-  const settings = data?.config;
-
-  const [form, setForm] = useState<Record<string, any>>({});
-  const [pricingText, setPricingText] = useState('');
-  const [pricingError, setPricingError] = useState('');
+  const { data, loading } = useApi<{ config: PluginConfig }>('/settings');
+  const [config, setConfig] = useState<PluginConfig | null>(null);
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  // 数据加载后初始化表单
   useEffect(() => {
-    if (settings) {
-      const next: Record<string, any> = { ...settings };
-      setForm(next);
-      const pricing = settings.model_pricing;
-      if (pricing && typeof pricing === 'object') {
-        try {
-          setPricingText(JSON.stringify(pricing, null, 2));
-        } catch {
-          setPricingText('');
-        }
-      } else if (typeof pricing === 'string') {
-        setPricingText(pricing);
-      } else {
-        setPricingText('{\n  "gpt-4o": {"input": 0.005, "cached": 0.0025, "output": 0.015}\n}');
-      }
-    }
-  }, [settings]);
+    if (data?.config) setConfig(data.config);
+  }, [data]);
 
-  const updateField = (key: string, value: any) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    setFeedback(null);
+  const update = <K extends keyof PluginConfig>(key: K, value: PluginConfig[K]) => {
+    setConfig((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
-  const handleSave = async () => {
+  const save = async () => {
+    if (!config) return;
     setSaving(true);
     setFeedback(null);
-    setPricingError('');
-
-    // 校验并解析 model_pricing
-    let pricing: any = undefined;
-    const trimmed = pricingText.trim();
-    if (trimmed) {
-      try {
-        pricing = JSON.parse(trimmed);
-      } catch (e: any) {
-        setPricingError('model_pricing 不是合法的 JSON：' + (e?.message ?? String(e)));
-        setSaving(false);
-        return;
-      }
-    }
-
-    const payload = { ...form };
-    if (pricing !== undefined) {
-      payload.model_pricing = pricing;
-    }
-
     try {
-      await apiPost('/settings', { config: payload });
-      setFeedback({ type: 'success', message: '设置已保存' });
-      refresh();
+      const res = await apiPost('/settings', { config });
+      if (res?.ok) {
+        setFeedback({ ok: true, msg: '保存成功' });
+        setTimeout(() => setFeedback(null), 3000);
+      } else {
+        setFeedback({ ok: false, msg: res?.error || '保存失败' });
+      }
     } catch (e: any) {
-      setFeedback({ type: 'error', message: '保存失败：' + (e?.message ?? String(e)) });
+      setFeedback({ ok: false, msg: e?.message || '网络错误' });
     } finally {
       setSaving(false);
     }
   };
 
+  const scan = async () => {
+    setFeedback(null);
+    try {
+      const res = await apiPost('/scan', {});
+      if (res?.ok) {
+        setFeedback({ ok: true, msg: '扫描已触发，请稍后查看数据' });
+        setTimeout(() => setFeedback(null), 4000);
+      } else {
+        setFeedback({ ok: false, msg: res?.error || '触发失败' });
+      }
+    } catch (e: any) {
+      setFeedback({ ok: false, msg: e?.message || '网络错误' });
+    }
+  };
+
+  if (loading && !config) {
+    return (
+      <div className="state-box">
+        <div className="state-box__spinner" />
+        <div>加载配置中...</div>
+      </div>
+    );
+  }
+
+  if (!config) {
+    return (
+      <div className="state-box">
+        <div>暂无配置数据</div>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <Link to="/" className="page-back">← 返回</Link>
-      <h1 className="page-title">⚙ 设置</h1>
-      <p className="page-subtitle">配置体检模块开关、阈值与模型定价</p>
+      <h1 className="page-title">⚙️ 设置</h1>
+      <p className="page-subtitle">管理各分析模块的开关与阈值</p>
 
-      {loading && (
-        <div className="state-box">
-          <div className="state-box__spinner" />
-          <div>加载中...</div>
-        </div>
-      )}
-      {error && !loading && (
-        <div className="state-box state-box--error">
-          <div className="state-box__spinner" />
-          <div>加载失败：{error}</div>
-        </div>
-      )}
-
-      {settings && !loading && (
-        <div className="settings-form">
-          {/* 开关 */}
-          <div className="card">
-            <div className="card__title">模块开关</div>
-            {TOGGLE_FIELDS.map((f) => (
-              <div className="form-row" key={f.key}>
-                <div className="form-row__label">
-                  <span className="form-row__name">{f.label}</span>
-                  <span className="form-row__desc">{f.desc}</span>
-                </div>
-                <label className="toggle">
-                  <input
-                    type="checkbox"
-                    checked={!!form[f.key]}
-                    onChange={(e) => updateField(f.key, e.target.checked)}
-                  />
-                  <span className="toggle__slider" />
-                </label>
+      {/* 功能模块开关 */}
+      <h2 className="section-title">功能模块</h2>
+      <div className="settings-grid">
+        {MODULES.map((m) => (
+          <div key={m.key} className="settings-card">
+            <div className="settings-card__header">
+              <div>
+                <div className="settings-card__title">{m.title}</div>
+                <div className="settings-card__desc">{m.desc}</div>
               </div>
-            ))}
-          </div>
-
-          {/* 阈值 */}
-          <div className="card">
-            <div className="card__title">阈值配置</div>
-            {NUMBER_FIELDS.map((f) => (
-              <div className="form-row" key={f.key}>
-                <div className="form-row__label">
-                  <span className="form-row__name">{f.label}</span>
-                  <span className="form-row__desc">{f.desc}</span>
-                </div>
+              <label className="toggle">
                 <input
-                  className="number-input"
-                  type="number"
-                  min={f.min}
-                  step={f.step}
-                  value={form[f.key] ?? 0}
-                  onChange={(e) => updateField(f.key, Number(e.target.value))}
+                  type="checkbox"
+                  checked={!!config[m.key as keyof PluginConfig]}
+                  onChange={(e) =>
+                    update(m.key as keyof PluginConfig, e.target.checked as never)
+                  }
                 />
-              </div>
-            ))}
+                <span className="toggle__slider" />
+              </label>
+            </div>
           </div>
+        ))}
+      </div>
 
-          {/* 模型定价 */}
-          <div className="card">
-            <div className="card__title">模型定价 (model_pricing)</div>
-            <p className="form-row__desc" style={{ marginBottom: 10 }}>
-              以 JSON 格式配置各模型的每千 Token 价格（单位：美元）。
-            </p>
-            <textarea
-              className="textarea-input"
-              value={pricingText}
-              onChange={(e) => {
-                setPricingText(e.target.value);
-                setFeedback(null);
-                setPricingError('');
-              }}
-              spellCheck={false}
-            />
-            {pricingError && (
-              <div className="feedback error" style={{ marginTop: 10 }}>
-                {pricingError}
-              </div>
-            )}
-          </div>
-
-          {/* 反馈与保存 */}
-          {feedback && (
-            <div className={'feedback ' + feedback.type}>{feedback.message}</div>
-          )}
-          <div>
-            <button
-              className="btn btn-primary"
-              onClick={handleSave}
-              disabled={saving}
-            >
-              {saving ? '保存中...' : '保存设置'}
-            </button>
-          </div>
+      {/* 数值配置 */}
+      <h2 className="section-title">阈值配置</h2>
+      <div className="card">
+        <div className="form-row">
+          <label className="form-row__label">慢响应阈值（秒）</label>
+          <input
+            type="number"
+            className="input"
+            min={1}
+            max={300}
+            value={config.runtime_alert_threshold}
+            onChange={(e) =>
+              update('runtime_alert_threshold', Number(e.target.value))
+            }
+          />
+          <span className="form-row__desc">
+            LLM 响应超过此阈值时触发告警
+          </span>
         </div>
-      )}
+        <div className="form-row">
+          <label className="form-row__label">Token 用量告警阈值</label>
+          <input
+            type="number"
+            className="input"
+            min={100}
+            step={1000}
+            value={config.token_alert_threshold}
+            onChange={(e) =>
+              update('token_alert_threshold', Number(e.target.value))
+            }
+          />
+          <span className="form-row__desc">
+            单次请求 Token 超过此值时告警
+          </span>
+        </div>
+        <div className="form-row">
+          <label className="form-row__label">缓存破坏检测轮数</label>
+          <input
+            type="number"
+            className="input"
+            min={1}
+            max={20}
+            value={config.cache_disruption_rounds}
+            onChange={(e) =>
+              update('cache_disruption_rounds', Number(e.target.value))
+            }
+          />
+          <span className="form-row__desc">
+            连续 N 轮缓存未命中视为缓存破坏
+          </span>
+        </div>
+      </div>
+
+      {/* 高级配置 */}
+      <h2 className="section-title">存储路径</h2>
+      <div className="card">
+        <div className="form-row">
+          <label className="form-row__label">运行时快照目录</label>
+          <input
+            type="text"
+            className="input"
+            value={config.runtime_dump_root}
+            onChange={(e) => update('runtime_dump_root', e.target.value)}
+          />
+          <span className="form-row__desc">诊断快照的保存根目录</span>
+        </div>
+        <div className="form-row">
+          <label className="form-row__label">日志归档目录</label>
+          <input
+            type="text"
+            className="input"
+            value={config.log_dump_root}
+            onChange={(e) => update('log_dump_root', e.target.value)}
+          />
+          <span className="form-row__desc">错误日志与堆栈的保存目录</span>
+        </div>
+      </div>
+
+      <div className="settings-actions">
+        <button className="btn btn-primary" onClick={save} disabled={saving}>
+          {saving ? '保存中...' : '保存配置'}
+        </button>
+        <button className="btn btn-secondary" onClick={scan}>
+          立即扫描
+        </button>
+        {feedback && (
+          <div className={'feedback ' + (feedback.ok ? 'success' : 'error')}>
+            {feedback.msg}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

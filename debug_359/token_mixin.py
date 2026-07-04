@@ -157,26 +157,6 @@ class TokenMixin:
             return 100  # 无数据视为健康
         return health_score_from_metric(100 - ratio, [(20, 100), (40, 80), (60, 60), (100, 40)])
 
-    def get_cost_estimate(self) -> dict:
-        """根据单价表估算成本。"""
-        pricing = self.cfg("model_pricing", {})
-        if not pricing:
-            return {"available": False, "msg": "未配置模型单价表"}
-        records = self.get_token_buf()
-        cost = {"input": 0.0, "output": 0.0, "total": 0.0}
-        for r in records:
-            model = r.get("model", "")
-            p = pricing.get(model) or pricing.get("*", {})
-            in_price = p.get("input", 0) / 1000
-            out_price = p.get("output", 0) / 1000
-            cost["input"] += r.get("prompt", 0) * in_price
-            cost["output"] += r.get("completion", 0) * out_price
-        cost["total"] = round(cost["input"] + cost["output"], 4)
-        cost["input"] = round(cost["input"], 4)
-        cost["output"] = round(cost["output"], 4)
-        cost["available"] = True
-        return cost
-
     def fmt_token_oneline(self, report: dict | None = None) -> str:
         """格式化一行摘要。"""
         if report is None:

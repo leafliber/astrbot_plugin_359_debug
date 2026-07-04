@@ -227,10 +227,10 @@ export default function ContextDetail() {
             </div>
           </div>
 
-          {/* F3: 输出链装饰信息 */}
+          {/* 输出链装饰信息 */}
           {outputChain && (
             <>
-              <h2 className="section-title">输出链装饰 (F3)</h2>
+              <h2 className="section-title">输出链装饰</h2>
               <div className="stat-grid" style={{ marginBottom: 20 }}>
                 <div className="stat-block">
                   <div className="stat-block__label">是否可用</div>

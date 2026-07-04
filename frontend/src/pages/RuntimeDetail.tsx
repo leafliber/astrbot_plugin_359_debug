@@ -143,7 +143,7 @@ export default function RuntimeDetail() {
           </div>
 
           {/* 按提供商拆分 */}
-          <h2 className="section-title">按提供商拆分 (ProviderStat 交叉校验)</h2>
+          <h2 className="section-title">按提供商拆分</h2>
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
@@ -174,8 +174,8 @@ export default function RuntimeDetail() {
             </table>
           </div>
 
-          {/* F4: 按平台拆分 */}
-          <h2 className="section-title">🌐 按平台拆分 (F4)</h2>
+          {/* 按平台拆分 */}
+          <h2 className="section-title">🌐 按平台拆分</h2>
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
