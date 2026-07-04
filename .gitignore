@@ -1,0 +1,39 @@
+# ===== Python =====
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+build/
+dist/
+
+# ===== 数据库 / 运行时数据 =====
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# ===== 类型检查 / Linter 缓存 =====
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# ===== 前端（Vite + React 源码保留；构建产物 pages/dashboard/ 提交以便零构建部署）=====
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ===== IDE / 编辑器 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+
+# ===== 环境版本锁定（本地开发用）=====
+.python-version

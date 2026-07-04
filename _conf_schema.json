@@ -1,0 +1,72 @@
+{
+  "command_prefix": {
+    "type": "string",
+    "description": "本插件所有诊断指令的统一前缀",
+    "default": "debug"
+  },
+  "enable_runtime_analysis": {
+    "type": "bool",
+    "description": "开启运行时间分析：记录各阶段耗时（唤醒/LLM/工具/总耗时/TTFT）",
+    "default": true
+  },
+  "enable_token_analysis": {
+    "type": "bool",
+    "description": "开启 Token 分析：聚合 ProviderStat 表 + on_llm_response 自采",
+    "default": true
+  },
+  "enable_context_dump": {
+    "type": "bool",
+    "description": "开启上下文注入分析：记录 system_prompt / extra_user_content_parts / 历史 / 工具集",
+    "default": true
+  },
+  "enable_tool_analysis": {
+    "type": "bool",
+    "description": "开启工具调用分析：记录 名/参/返回/耗时/失败率 + Agent 多步轨迹",
+    "default": true
+  },
+  "enable_log_analysis": {
+    "type": "bool",
+    "description": "开启错误日志分析：读取 astrbot.log + on_plugin_error 实时捕获",
+    "default": true
+  },
+  "enable_plugin_analysis": {
+    "type": "bool",
+    "description": "开启插件分析：安全扫描 + 指令冲突 + 生命周期审计",
+    "default": true
+  },
+  "token_persist_to": {
+    "type": "string",
+    "description": "Token 统计持久化位置：kv（插件 KV 存储）| file",
+    "default": "kv"
+  },
+  "log_tail_lines": {
+    "type": "int",
+    "description": "日志分析时读取的尾部行数（防爆内存）",
+    "default": 500
+  },
+  "admin_only": {
+    "type": "bool",
+    "description": "是否仅管理员可执行诊断指令",
+    "default": true
+  },
+  "slow_response_threshold": {
+    "type": "float",
+    "description": "慢响应告警阈值（秒），超过则触发 SSE 告警",
+    "default": 10.0
+  },
+  "token_alert_threshold": {
+    "type": "int",
+    "description": "单次请求 token 告警阈值，超过则触发 SSE 告警",
+    "default": 10000
+  },
+  "cache_disruption_rounds": {
+    "type": "int",
+    "description": "缓存破坏检测窗口：连续 N 轮 system_prompt 变化才告警",
+    "default": 3
+  },
+  "model_pricing": {
+    "type": "object",
+    "description": "模型单价表（JSON）：{模型名: {input: 单价/1k, output: 单价/1k}}",
+    "default": {}
+  }
+}
