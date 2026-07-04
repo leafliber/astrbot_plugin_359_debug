@@ -1383,3 +1383,288 @@ table.data-table tbody tr {
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
+/* ===========================================================================
+   AI 智能体检
+   =========================================================================== */
+
+/* 小型 spinner（按钮内使用） */
+.state-box__spinner--small {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+  margin-bottom: 0;
+}
+
+/* 体检按钮区域 */
+.ai-checkup-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 20px;
+}
+
+.ai-checkup__run-btn {
+  padding: 12px 32px;
+  font-size: 15px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--color-primary), var(--brand-gradient-end, #66BB6A));
+  box-shadow: 0 4px 14px rgba(46, 125, 50, 0.3);
+}
+
+.ai-checkup__run-btn:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(46, 125, 50, 0.4);
+  transform: translateY(-1px);
+}
+
+.ai-checkup__provider-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* 体检结论卡片 */
+.ai-checkup {
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.ai-checkup--error {
+  border-left: 3px solid var(--color-error);
+}
+
+.ai-checkup__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.ai-checkup__icon {
+  font-size: 28px;
+}
+
+.ai-checkup__header-text {
+  flex: 1;
+}
+
+.ai-checkup__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ai-checkup__subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.ai-checkup__close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+  line-height: 1;
+}
+
+.ai-checkup__close:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+/* 总分行 */
+.ai-checkup__score-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 16px;
+}
+
+.ai-checkup__score-circle {
+  flex-shrink: 0;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 4px solid var(--color-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-bg);
+}
+
+.ai-checkup__score-num {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ai-checkup__score-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.ai-checkup__overall {
+  flex: 1;
+}
+
+.ai-checkup__level {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.ai-checkup__overall-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* 分区 */
+.ai-checkup__section {
+  margin-bottom: 16px;
+}
+
+.ai-checkup__section-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.ai-checkup__section-title--good {
+  color: var(--color-primary);
+}
+
+.ai-checkup__section-title--risk {
+  color: var(--color-warning);
+}
+
+/* 亮点列表 */
+.ai-checkup__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ai-checkup__list--good li {
+  padding: 6px 0 6px 20px;
+  position: relative;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.ai-checkup__list--good li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+/* 风险卡片 */
+.ai-checkup__risks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-checkup__risk {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border-left: 3px solid var(--color-warning);
+}
+
+.ai-checkup__risk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ai-checkup__risk-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  line-height: 1.5;
+}
+
+.ai-checkup__risk-module {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ai-checkup__risk-issue {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 4px;
+}
+
+.ai-checkup__risk-advice {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.ai-checkup__advice-label {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+/* 总结 */
+.ai-checkup__summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px;
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.ai-checkup__summary-icon {
+  flex-shrink: 0;
+}
+
+/* 错误/原文展示 */
+.ai-checkup__error-msg {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--error-bg, rgba(198, 40, 40, 0.08));
+  color: var(--color-error);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ai-checkup__raw {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+  font-family: inherit;
+}
+

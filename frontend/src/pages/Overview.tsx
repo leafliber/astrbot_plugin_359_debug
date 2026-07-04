@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
-import { useApi, subscribeSSE } from '../api/bridge';
+import { useEffect, useState, useCallback } from 'react';
+import { useApi, subscribeSSE, apiGet, apiPost } from '../api/bridge';
 import HealthScore from '../components/HealthScore';
 import RadarChart, { RadarData } from '../components/RadarChart';
 import CheckupCard, { CheckupStatus } from '../components/CheckupCard';
 import Timeline, { TimelineItem } from '../components/Timeline';
+import AiCheckupCard, { CheckupResult } from '../components/AiCheckupCard';
 
 interface ModuleInfo {
   key: string;
@@ -53,6 +54,47 @@ function ErrorBox({ message }: { message: string }) {
 export default function Overview() {
   const { data, loading, error, refresh } = useApi<OverviewData>('/overview');
   const [alerts, setAlerts] = useState<TimelineItem[]>([]);
+
+  // ===== AI 智能体检状态 =====
+  const [providerName, setProviderName] = useState<string>('');
+  const [providerAvailable, setProviderAvailable] = useState<boolean>(true);
+  const [checkupLoading, setCheckupLoading] = useState(false);
+  const [checkupResult, setCheckupResult] = useState<CheckupResult | null>(null);
+
+  // 查询默认 Provider（用于按钮下方小字展示）
+  useEffect(() => {
+    apiGet('/ai_provider')
+      .then((res: any) => {
+        setProviderName(res?.provider_name || '');
+        setProviderAvailable(res?.available !== false);
+      })
+      .catch(() => {
+        setProviderName('');
+        setProviderAvailable(false);
+      });
+  }, []);
+
+  // 执行 AI 体检
+  const runCheckup = useCallback(async () => {
+    setCheckupLoading(true);
+    setCheckupResult(null);
+    try {
+      const res = await apiPost('/ai_checkup', {});
+      setCheckupResult(res as CheckupResult);
+    } catch (err: any) {
+      setCheckupResult({
+        timestamp: Math.floor(Date.now() / 1000),
+        provider_id: null,
+        provider_name: providerName,
+        modules: {},
+        conclusion: null,
+        raw_text: null,
+        error: err?.message || String(err),
+      });
+    } finally {
+      setCheckupLoading(false);
+    }
+  }, [providerName]);
 
   // 初始化告警列表
   useEffect(() => {
@@ -154,6 +196,39 @@ export default function Overview() {
           <RadarChart data={radar} />
         </div>
       </div>
+
+      {/* AI 智能体检 */}
+      <div className="ai-checkup-section anim-fade-up delay-2">
+        <button
+          className="btn btn-primary ai-checkup__run-btn"
+          onClick={runCheckup}
+          disabled={checkupLoading || !providerAvailable}
+        >
+          {checkupLoading ? (
+            <>
+              <span className="state-box__spinner state-box__spinner--small" />
+              AI 正在诊断中...
+            </>
+          ) : (
+            <>🩺 一键 AI 智能体检</>
+          )}
+        </button>
+        <div className="ai-checkup__provider-hint">
+          {providerAvailable ? (
+            <>使用 AstrBot 默认 Provider：{providerName || '加载中...'}</>
+          ) : (
+            <>未检测到可用 LLM Provider，请在 AstrBot 配置中添加聊天模型提供商</>
+          )}
+        </div>
+      </div>
+
+      {/* AI 体检结论 */}
+      {checkupResult && (
+        <AiCheckupCard
+          result={checkupResult}
+          onClose={() => setCheckupResult(null)}
+        />
+      )}
 
       {/* 中部：模块卡片网格 */}
       <h2 className="section-title">模块体检</h2>

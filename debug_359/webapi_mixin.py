@@ -37,6 +37,8 @@ class WebApiMixin:
             ("/theme", self._api_get_theme, ["GET"], "读取主题"),
             ("/theme", self._api_save_theme, ["POST"], "保存主题"),
             ("/scan", self._api_scan, ["POST"], "手动触发扫描"),
+            ("/ai_provider", self._api_ai_provider, ["GET"], "查询默认AI Provider"),
+            ("/ai_checkup", self._api_ai_checkup, ["POST"], "AI智能体检"),
             ("/live", self._api_live, ["GET"], "实时告警SSE"),
         ]
         for route, handler, methods, desc in endpoints:
@@ -190,6 +192,37 @@ class WebApiMixin:
             return jsonify({"error": f"未知扫描类型: {scan_type}"})
         except Exception as e:
             return jsonify({"error": str(e)})
+
+    async def _api_ai_provider(self) -> Any:
+        """查询当前默认 AI Provider（用于按钮下方小字展示）。"""
+        from quart import jsonify
+        try:
+            provider_id = self._get_default_provider_id()
+            provider_name = self._get_provider_display_name(provider_id)
+            return jsonify({
+                "provider_id": provider_id,
+                "provider_name": provider_name,
+                "available": provider_id is not None,
+            })
+        except Exception as e:
+            return jsonify({
+                "provider_id": None,
+                "provider_name": None,
+                "available": False,
+                "error": str(e),
+            })
+
+    async def _api_ai_checkup(self) -> Any:
+        """执行 AI 智能体检。"""
+        from quart import jsonify
+        try:
+            result = await self.run_ai_checkup()
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({
+                "error": f"{type(e).__name__}: {e}",
+                "timestamp": int(__import__("time").time()),
+            })
 
     async def _api_live(self) -> Any:
         """SSE 实时告警推送。"""
