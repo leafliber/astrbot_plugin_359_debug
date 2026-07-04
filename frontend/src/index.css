@@ -1668,3 +1668,366 @@ table.data-table tbody tr {
   font-family: inherit;
 }
 
+/* ===========================================================================
+   HERO 主视觉区（首页核心）
+   =========================================================================== */
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding: 32px 24px 28px;
+  margin-bottom: 28px;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 0%, var(--accent-bg), transparent 70%),
+    var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 背景装饰光晕 */
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, var(--accent-bg), transparent 60%);
+  pointer-events: none;
+  animation: heroGlow 4s ease-in-out infinite;
+}
+
+@keyframes heroGlow {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50% { opacity: 0.9; transform: translateX(-50%) scale(1.15); }
+}
+
+.hero__score {
+  position: relative;
+  z-index: 1;
+}
+
+/* 健康分圆环在 hero 区放大 */
+.hero__score .health-score__svg {
+  width: 200px;
+  height: 200px;
+}
+
+.hero__action {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 大型 CTA 按钮 */
+.hero__cta {
+  padding: 16px 44px;
+  font-size: 17px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--color-primary), var(--brand-gradient-end, #66BB6A));
+  box-shadow: 0 8px 24px rgba(46, 125, 50, 0.35);
+  letter-spacing: 1px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero__cta::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  animation: shine 3s ease-in-out infinite;
+}
+
+@keyframes shine {
+  0%, 100% { left: -100%; }
+  50% { left: 160%; }
+}
+
+.hero__cta:hover:not(:disabled) {
+  box-shadow: 0 10px 30px rgba(46, 125, 50, 0.45);
+  transform: translateY(-2px);
+}
+
+.hero__cta-icon {
+  font-size: 20px;
+  margin-right: 4px;
+}
+
+.hero__cta--small {
+  padding: 9px 24px;
+  font-size: 14px;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+
+.hero__cta--small::after {
+  display: none;
+}
+
+.hero__provider-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.hero__recheck {
+  display: flex;
+  justify-content: center;
+  margin: -12px 0 24px;
+}
+
+@media (max-width: 600px) {
+  .hero {
+    padding: 24px 14px;
+    gap: 20px;
+  }
+  .hero__score .health-score__svg {
+    width: 160px;
+    height: 160px;
+  }
+  .hero__cta {
+    padding: 14px 32px;
+    font-size: 15px;
+  }
+}
+
+/* ===========================================================================
+   体检进度动画
+   =========================================================================== */
+.checkup-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 12px 0;
+}
+
+/* 阶段标题 */
+.checkup-progress__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.checkup-progress__scan,
+.checkup-progress__brain {
+  font-size: 22px;
+  animation: scanPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes scanPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.18); opacity: 0.8; }
+}
+
+/* 省略号动画 */
+.checkup-progress__dots {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 2px;
+}
+
+.checkup-progress__dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: dotBounce 1.2s ease-in-out infinite;
+}
+
+.checkup-progress__dots .dot:nth-child(2) { animation-delay: 0.2s; }
+.checkup-progress__dots .dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* 模块进度网格 */
+.checkup-progress__modules {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.checkup-module {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 76px;
+  padding: 12px 6px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-color);
+  background: var(--bg-elevated);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: moduleIn 0.4s ease both;
+}
+
+@keyframes moduleIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.checkup-module.is-pending {
+  opacity: 0.4;
+}
+
+.checkup-module.is-active {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+  transform: translateY(-3px) scale(1.05);
+  opacity: 1;
+}
+
+.checkup-module.is-done {
+  border-color: var(--color-primary);
+  background: var(--accent-bg);
+  opacity: 1;
+  transform: scale(1);
+}
+
+.checkup-module__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  transition: all 0.4s ease;
+}
+
+.checkup-module.is-done .checkup-module__icon {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+  font-size: 20px;
+  animation: checkPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes checkPop {
+  0% { transform: scale(0.3); }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.checkup-module__name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* 激活模块的脉冲圈 */
+.checkup-module__pulse {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--color-primary);
+  animation: ringPulse 1.2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ringPulse {
+  0% { opacity: 0.8; transform: translateX(-50%) scale(0.8); }
+  100% { opacity: 0; transform: translateX(-50%) scale(2.2); }
+}
+
+/* AI 诊断波纹 */
+.checkup-progress__waves {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+}
+
+.checkup-progress__waves .wave {
+  width: 5px;
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 3px;
+  animation: waveBar 1s ease-in-out infinite;
+}
+
+.checkup-progress__waves .wave:nth-child(2) { animation-delay: 0.15s; }
+.checkup-progress__waves .wave:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes waveBar {
+  0%, 100% { transform: scaleY(0.3); opacity: 0.5; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+/* 进度条 */
+.checkup-progress__bar {
+  width: 100%;
+  max-width: 420px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+
+.checkup-progress__bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--color-primary), var(--brand-gradient-end, #66BB6A));
+  background-size: 200% 100%;
+  animation: barShimmer 1.5s linear infinite;
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes barShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.checkup-progress__hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 结论卡片在 hero 区内时去掉底部外边距 */
+.hero__action .ai-checkup {
+  margin-bottom: 0;
+  width: 100%;
+  text-align: left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero::before,
+  .hero__cta::after,
+  .checkup-module__pulse,
+  .checkup-progress__waves .wave,
+  .checkup-progress__dots .dot,
+  .checkup-progress__bar-fill {
+    animation: none !important;
+  }
+}
+

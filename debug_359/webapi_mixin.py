@@ -145,7 +145,7 @@ class WebApiMixin:
         from quart import jsonify, request
         level = request.args.get("level")
         plugin = request.args.get("plugin")
-        limit = int(request.args.get("limit", 100))
+        limit = int(request.args.get("limit", 500))
         return jsonify(await self.get_log_detail(level=level, plugin=plugin, limit=limit))
 
     async def _api_plugin(self) -> Any:

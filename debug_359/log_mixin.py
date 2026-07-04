@@ -124,14 +124,22 @@ class LogMixin:
     # ==================== 查询/聚合 ====================
 
     async def get_log_detail(self, level: str | None = None,
-                             plugin: str | None = None, limit: int = 100) -> dict:
-        """日志详情。"""
-        # 1. 文件日志
+                             plugin: str | None = None, limit: int = 500) -> dict:
+        """日志详情。
+
+        Args:
+            limit: 返回的日志条目上限（最终结果条数）。
+                   文件读取行数会按 limit 动态放大（×4），确保解析后条目足够。
+        """
+        # 安全上限，避免一次性读取过多导致性能问题
+        limit = max(1, min(int(limit), 5000))
+        # 1. 文件日志 —— 读取行数按 limit 动态放大，至少读取配置的 log_tail_lines
         log_path = self.get_log_file_path()
         file_entries = []
         file_exists = os.path.isfile(log_path)
         if file_exists:
-            n = int(self.cfg("log_tail_lines", 500)) * 4
+            cfg_lines = int(self.cfg("log_tail_lines", 500))
+            n = max(cfg_lines, limit * 4)
             lines = self._lg_tail_file(log_path, n)
             for line in lines:
                 parsed = self._lg_parse_line(line)

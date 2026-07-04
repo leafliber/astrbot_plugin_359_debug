@@ -56,7 +56,8 @@ const levelClass = (level: string): string => {
 };
 
 export default function LogDetail() {
-  const { data, loading, error } = useApi<LogData>('/log');
+  const [pageSize, setPageSize] = useState(500);
+  const { data, loading, error } = useApi<LogData>('/log', { limit: pageSize });
 
   const [levelFilter, setLevelFilter] = useState('');
   const [pluginFilter, setPluginFilter] = useState('');
@@ -148,6 +149,19 @@ export default function LogDetail() {
               value={pluginFilter}
               onChange={(e) => setPluginFilter(e.target.value)}
             />
+            <label>读取条数：</label>
+            <select
+              className="text-input"
+              style={{ width: 'auto' }}
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
+              <option value={100}>100 条</option>
+              <option value={500}>500 条</option>
+              <option value={1000}>1000 条</option>
+              <option value={2000}>2000 条</option>
+              <option value={5000}>5000 条</option>
+            </select>
             <span className="text-muted" style={{ fontSize: 12 }}>
               共 {filteredEntries.length} 条
             </span>
@@ -166,7 +180,7 @@ export default function LogDetail() {
                 </tr>
               </thead>
               <tbody>
-                {filteredEntries.slice(0, 200).map((e, i) => (
+                {filteredEntries.map((e, i) => (
                   <tr key={i}>
                     <td style={{ whiteSpace: 'nowrap' }}>{formatTs(e.time ?? e.ts)}</td>
                     <td className={levelClass(e.level ?? '')}>{e.level ?? '-'}</td>

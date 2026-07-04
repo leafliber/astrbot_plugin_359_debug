@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi, subscribeSSE, apiGet, apiPost } from '../api/bridge';
 import HealthScore from '../components/HealthScore';
 import RadarChart, { RadarData } from '../components/RadarChart';
 import CheckupCard, { CheckupStatus } from '../components/CheckupCard';
 import Timeline, { TimelineItem } from '../components/Timeline';
 import AiCheckupCard, { CheckupResult } from '../components/AiCheckupCard';
+import CheckupProgress, { CheckupPhase } from '../components/CheckupProgress';
 
 interface ModuleInfo {
   key: string;
@@ -33,6 +34,12 @@ const MODULE_ICONS: Record<string, string> = {
   plugin: '🧩',
 };
 
+const COLLECT_INTERVAL = 360; // 每个模块采集间隔(ms)
+const MODULE_TOTAL = 6;
+const MIN_ANALYZE_TIME = 650; // 分析阶段最短展示(ms)
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 function Loading() {
   return (
     <div className="state-box">
@@ -58,10 +65,12 @@ export default function Overview() {
   // ===== AI 智能体检状态 =====
   const [providerName, setProviderName] = useState<string>('');
   const [providerAvailable, setProviderAvailable] = useState<boolean>(true);
-  const [checkupLoading, setCheckupLoading] = useState(false);
+  const [checkupPhase, setCheckupPhase] = useState<CheckupPhase | null>(null);
+  const [doneCount, setDoneCount] = useState(0);
   const [checkupResult, setCheckupResult] = useState<CheckupResult | null>(null);
+  const runIdRef = useRef(0); // 防止并发/过期请求覆盖
 
-  // 查询默认 Provider（用于按钮下方小字展示）
+  // 查询默认 Provider（按钮下方小字）
   useEffect(() => {
     apiGet('/ai_provider')
       .then((res: any) => {
@@ -74,14 +83,44 @@ export default function Overview() {
       });
   }, []);
 
-  // 执行 AI 体检
+  // 执行 AI 体检（编排：采集动画 → 分析阶段 → 结果）
   const runCheckup = useCallback(async () => {
-    setCheckupLoading(true);
+    if (checkupPhase !== null) return; // 防止重复点击
+    const myRunId = ++runIdRef.current;
     setCheckupResult(null);
+    setDoneCount(0);
+    setCheckupPhase('collecting');
+
+    // 采集进度动画（依次点亮 6 个模块）
+    const collectAnim = (async () => {
+      for (let i = 1; i <= MODULE_TOTAL; i++) {
+        await delay(COLLECT_INTERVAL);
+        if (runIdRef.current !== myRunId) return; // 已被新一轮取消
+        setDoneCount(i);
+      }
+    })();
+
     try {
-      const res = await apiPost('/ai_checkup', {});
-      setCheckupResult(res as CheckupResult);
+      // 并行发起真实请求
+      const requestPromise = apiPost('/ai_checkup', {});
+
+      // 等采集动画播完
+      await collectAnim;
+      if (runIdRef.current !== myRunId) return;
+
+      // 进入 AI 诊断阶段
+      setCheckupPhase('analyzing');
+
+      // 等待 LLM 结果
+      const res = (await requestPromise) as CheckupResult;
+
+      // 分析阶段至少展示 MIN_ANALYZE_TIME，让动画完整
+      await delay(MIN_ANALYZE_TIME);
+      if (runIdRef.current !== myRunId) return;
+
+      setCheckupResult(res);
     } catch (err: any) {
+      if (runIdRef.current !== myRunId) return;
       setCheckupResult({
         timestamp: Math.floor(Date.now() / 1000),
         provider_id: null,
@@ -92,9 +131,12 @@ export default function Overview() {
         error: err?.message || String(err),
       });
     } finally {
-      setCheckupLoading(false);
+      if (runIdRef.current === myRunId) {
+        setCheckupPhase(null);
+        setDoneCount(0);
+      }
     }
-  }, [providerName]);
+  }, [checkupPhase, providerName]);
 
   // 初始化告警列表
   useEffect(() => {
@@ -106,7 +148,6 @@ export default function Overview() {
   // 订阅实时告警
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
-    let cancelled = false;
     try {
       const fn = subscribeSSE(
         '/live',
@@ -122,25 +163,21 @@ export default function Overview() {
             setAlerts((prev) => [item, ...prev].slice(0, 100));
           },
           onError: () => {
-            /* 静默处理，避免控制台噪音 */
+            /* 静默 */
           },
         },
         { topic: 'alert' }
       );
-      if (typeof fn === 'function') {
-        unsubscribe = fn;
-      }
+      if (typeof fn === 'function') unsubscribe = fn;
     } catch {
-      /* subscribeSSE 可能因 bridge 未就绪而抛出，忽略 */
+      /* 忽略 */
     }
     return () => {
-      cancelled = true;
-      // 防御性调用：确保 unsubscribe 是函数才执行
       if (unsubscribe) {
         try {
           unsubscribe();
         } catch {
-          /* 卸载期间 bridge 可能已失效，静默吞掉 */
+          /* 卸载期间静默 */
         }
       }
     };
@@ -155,7 +192,6 @@ export default function Overview() {
   const radar = overview?.radar ?? {};
   const modules = overview?.modules ?? [];
 
-  // 补全默认模块（后端未返回时给出占位）
   const defaultModules: ModuleInfo[] = [
     { key: 'runtime', title: '运行时分析', score: 0, summary: '暂无数据', status: 'ok', detailRoute: '/runtime' },
     { key: 'token', title: 'Token 用量', score: 0, summary: '暂无数据', status: 'ok', detailRoute: '/token' },
@@ -167,18 +203,69 @@ export default function Overview() {
 
   const renderModules: ModuleInfo[] =
     modules.length > 0
-      ? modules.map((m) => ({
-          ...m,
-          icon: m.icon ?? MODULE_ICONS[m.key] ?? '',
-        }))
+      ? modules.map((m) => ({ ...m, icon: m.icon ?? MODULE_ICONS[m.key] ?? '' }))
       : defaultModules.map((m) => ({ ...m, icon: MODULE_ICONS[m.key] }));
+
+  const isChecking = checkupPhase !== null;
 
   return (
     <div>
-      <h1 className="page-title anim-fade-up">359° 体检总览</h1>
-      <p className="page-subtitle anim-fade-up delay-1">
-        全方位监测 AstrBot 运行健康度 · 实时告警推送中
-      </p>
+      {/* ===================== HERO 主视觉区 ===================== */}
+      <section className="hero anim-fade-up">
+        {/* 健康分大圆环 */}
+        <div className="hero__score anim-scale">
+          <HealthScore score={score} level={level} />
+        </div>
+
+        {/* 体检按钮 / 进度 / 结论 */}
+        <div className="hero__action">
+          {!isChecking && !checkupResult && (
+            <>
+              <button
+                className="btn btn-primary hero__cta"
+                onClick={runCheckup}
+                disabled={!providerAvailable}
+              >
+                <span className="hero__cta-icon">🩺</span>
+                一键 AI 智能体检
+              </button>
+              <div className="hero__provider-hint">
+                {providerAvailable ? (
+                  <>使用 AstrBot 默认 Provider：{providerName || '加载中…'}</>
+                ) : (
+                  <>未检测到可用 LLM Provider，请在 AstrBot 配置中添加聊天模型</>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* 体检进度动画 */}
+          {isChecking && checkupPhase && (
+            <CheckupProgress phase={checkupPhase} doneCount={doneCount} />
+          )}
+
+          {/* 体检结论 */}
+          {!isChecking && checkupResult && (
+            <AiCheckupCard
+              result={checkupResult}
+              onClose={() => setCheckupResult(null)}
+            />
+          )}
+        </div>
+      </section>
+
+      {/* 重新体检入口（结论展示后） */}
+      {!isChecking && checkupResult && (
+        <div className="hero__recheck anim-fade">
+          <button
+            className="btn btn-secondary hero__cta hero__cta--small"
+            onClick={runCheckup}
+            disabled={!providerAvailable}
+          >
+            🔄 重新体检
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="alert-banner warning anim-fade">
@@ -186,51 +273,13 @@ export default function Overview() {
         </div>
       )}
 
-      {/* 顶部：健康分 + 雷达图 */}
-      <div className="overview-top">
-        <div className="card anim-scale">
-          <HealthScore score={score} level={level} />
-        </div>
-        <div className="card anim-fade-up delay-2">
-          <div className="card__title">六维健康雷达</div>
-          <RadarChart data={radar} />
-        </div>
+      {/* ===================== 六维雷达 ===================== */}
+      <h2 className="section-title anim-fade-up">六维健康雷达</h2>
+      <div className="card anim-fade-up delay-1">
+        <RadarChart data={radar} />
       </div>
 
-      {/* AI 智能体检 */}
-      <div className="ai-checkup-section anim-fade-up delay-2">
-        <button
-          className="btn btn-primary ai-checkup__run-btn"
-          onClick={runCheckup}
-          disabled={checkupLoading || !providerAvailable}
-        >
-          {checkupLoading ? (
-            <>
-              <span className="state-box__spinner state-box__spinner--small" />
-              AI 正在诊断中...
-            </>
-          ) : (
-            <>🩺 一键 AI 智能体检</>
-          )}
-        </button>
-        <div className="ai-checkup__provider-hint">
-          {providerAvailable ? (
-            <>使用 AstrBot 默认 Provider：{providerName || '加载中...'}</>
-          ) : (
-            <>未检测到可用 LLM Provider，请在 AstrBot 配置中添加聊天模型提供商</>
-          )}
-        </div>
-      </div>
-
-      {/* AI 体检结论 */}
-      {checkupResult && (
-        <AiCheckupCard
-          result={checkupResult}
-          onClose={() => setCheckupResult(null)}
-        />
-      )}
-
-      {/* 中部：模块卡片网格 */}
+      {/* ===================== 模块卡片 ===================== */}
       <h2 className="section-title">模块体检</h2>
       <div className="checkup-grid">
         {renderModules.map((m, i) => (
@@ -247,7 +296,7 @@ export default function Overview() {
         ))}
       </div>
 
-      {/* 底部：告警时间线 */}
+      {/* ===================== 告警时间线 ===================== */}
       <h2 className="section-title">
         最近告警
         <button
