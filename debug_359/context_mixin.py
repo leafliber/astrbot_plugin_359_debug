@@ -22,6 +22,15 @@ class ContextMixin:
     @filter.on_llm_request(priority=100000)
     async def _ctx_on_req_head(self, event: AstrMessageEvent, req) -> None:
         """head：其他插件修改前，记录 system_prompt 原态。"""
+        # 运行时观测：记录本钩子被调用 + 当前是否已被 stop（说明前面有插件掐断了）
+        try:
+            self._record_hook_runtime(
+                "OnLLMRequestEvent",
+                stopped=event.is_stopped(),
+                order=[],  # head 第一个执行，顺序未知
+            )
+        except Exception:
+            pass
         if not self.is_enabled("context_dump"):
             return
         try:
@@ -34,6 +43,14 @@ class ContextMixin:
     @filter.on_llm_request(priority=-100000)
     async def _ctx_on_req_tail(self, event: AstrMessageEvent, req) -> None:
         """tail：其他插件修改后，dump 最终状态。"""
+        # 运行时观测：tail 能跑到这里 → 整条钩子链未被 stop 掐断
+        try:
+            rt = self._hook_runtime_log.get("OnLLMRequestEvent")
+            if rt:
+                # tail 执行说明未被掐断（次数+1在 head 已计，这里只标记非 stopped）
+                pass
+        except Exception:
+            pass
         if not self.is_enabled("context_dump"):
             return
         try:

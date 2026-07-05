@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../api/bridge';
 
@@ -45,19 +46,11 @@ interface HookHandler {
   desc?: string;
 }
 
-interface HookGroup {
-  event_type?: string;
-  label?: string;
-  risk_level?: string;
-  count?: number;
-  multi_plugin?: boolean;
-  same_priority?: boolean;
-  handlers?: HookHandler[];
-}
-
 interface HookConflict {
   type?: string;
   severity?: string;
+  static?: boolean;
+  runtime_evidence?: boolean;
   event_type?: string;
   event_label?: string;
   plugin?: string;
@@ -66,7 +59,30 @@ interface HookConflict {
   count?: number;
   plugins?: string[];
   priority?: number;
+  shared_obj?: boolean;
+  calls?: number;
+  stopped?: number;
+  stop_rate?: number;
+  last_order?: string[];
   desc?: string;
+}
+
+interface HookRuntimeInfo {
+  calls?: number;
+  stopped?: number;
+  has_evidence?: boolean;
+}
+
+interface HookGroup {
+  event_type?: string;
+  label?: string;
+  risk_level?: string;
+  shared_obj?: boolean;
+  count?: number;
+  multi_plugin?: boolean;
+  runtime?: HookRuntimeInfo | null;
+  handlers?: HookHandler[];
+  conflicts?: HookConflict[];
 }
 
 interface HooksReport {
@@ -76,6 +92,7 @@ interface HooksReport {
   conflicts?: HookConflict[];
   conflict_count?: number;
   high_risk_count?: number;
+  runtime_tracked?: string[];
   error?: string;
 }
 
@@ -124,6 +141,7 @@ const CONFLICT_TYPE_LABELS: Record<string, string> = {
   event_stop: '事件终止',
   overwrite: '覆盖风险',
   same_priority: '同优先级',
+  runtime_stop: '运行时终止',
 };
 
 const renderRiskBadge = (risk: string) => {
@@ -139,6 +157,169 @@ const renderRiskBadge = (risk: string) => {
     </span>
   );
 };
+
+// 钩子组卡片：折叠详情，精简显示
+function HookGroupCard({ group }: { group: HookGroup }) {
+  const [open, setOpen] = useState(false);
+  const conflicts = group.conflicts ?? [];
+  const handlers = group.handlers ?? [];
+  const risk = group.risk_level ?? 'info';
+  const runtime = group.runtime;
+  const hasRuntimeEvidence = runtime?.has_evidence;
+
+  // 头部严重级别样式
+  const headClass =
+    risk === 'high' ? 'severity-high' :
+    risk === 'medium' ? 'severity-medium' :
+    risk === 'low' ? 'severity-low' : '';
+
+  const riskLabel =
+    risk === 'high' ? '高危' :
+    risk === 'medium' ? '中危' :
+    risk === 'low' ? '低危' : '正常';
+
+  const pluginSet = new Set<string>();
+  handlers.forEach((h) => { if (h.plugin) pluginSet.add(h.plugin); });
+
+  return (
+    <div className="card" style={{ marginBottom: 10, padding: 0, overflow: 'hidden' }}>
+      {/* 折叠头部 */}
+      <div
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 14px', cursor: 'pointer', userSelect: 'none',
+          background: open ? 'var(--bg-elevated, rgba(0,0,0,0.03))' : 'transparent',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ width: 10, fontSize: '0.8em', color: 'var(--text-muted)' }}>{open ? '▼' : '▶'}</span>
+          <strong>{group.label ?? group.event_type}</strong>
+          <span className={`tag ${risk === 'high' || risk === 'medium' ? 'inactive' : 'active'}`} >
+            {riskLabel}
+          </span>
+          {group.shared_obj && (
+            <span className="tag inactive" style={{ fontSize: '0.75em' }}>共享对象</span>
+          )}
+          {hasRuntimeEvidence && (
+            <span className="tag inactive" style={{ background: 'var(--error)', fontSize: '0.75em' }}>
+              运行时实证
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="text-muted" style={{ fontSize: '0.85em' }}>
+            {handlers.length} 处理器 · {pluginSet.size} 插件
+          </span>
+          {conflicts.length > 0 && (
+            <span className={headClass} style={{ fontSize: '0.85em' }}>
+              {conflicts.length} 告警
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 展开内容 */}
+      {open && (
+        <div style={{ padding: '0 14px 12px', borderTop: '1px solid var(--border, rgba(0,0,0,0.06))' }}>
+          {/* 冲突清单 */}
+          {conflicts.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: '0.85em', color: 'var(--text-muted)', marginBottom: 6 }}>告警详情</div>
+              {conflicts.map((c, i) => (
+                <div key={i} style={{
+                  padding: '6px 10px', marginBottom: 4, borderRadius: 4,
+                  background: 'var(--bg-elevated, rgba(0,0,0,0.03))',
+                  borderLeft: `3px solid ${c.severity === 'high' ? 'var(--error)' : c.severity === 'medium' ? 'var(--warning, #f0ad4e)' : 'var(--border)'}`,
+                  fontSize: '0.88em',
+                }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span className={severityClass(c.severity)} style={{ fontWeight: 600 }}>
+                      {c.severity}
+                    </span>
+                    <span className="text-mono" style={{ fontSize: '0.85em' }}>
+                      {CONFLICT_TYPE_LABELS[c.type ?? ''] ?? c.type}
+                    </span>
+                    {c.runtime_evidence && (
+                      <span className="tag inactive" style={{ fontSize: '0.7em', background: 'var(--error)' }}>实证</span>
+                    )}
+                    {c.static && !c.runtime_evidence && (
+                      <span className="text-muted" style={{ fontSize: '0.75em' }}>静态</span>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 3 }}>{c.desc ?? '-'}</div>
+                  {/* 运行时实证数据 */}
+                  {c.type === 'runtime_stop' && (
+                    <div style={{ marginTop: 4, fontSize: '0.85em', color: 'var(--text-muted)' }}>
+                      调用 {c.calls} 次 / 终止 {c.stopped} 次 / 终止率 {c.stop_rate}%
+                      {c.last_order && c.last_order.length > 0 && (
+                        <span> · 末次顺序: {c.last_order.join(' → ')}</span>
+                      )}
+                    </div>
+                  )}
+                  {/* 涉及插件 */}
+                  {c.plugins && c.plugins.length > 0 && (
+                    <div style={{ marginTop: 3, fontSize: '0.82em' }} className="text-mono">
+                      {c.plugins.join(', ')}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 处理器表 */}
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: '0.85em', color: 'var(--text-muted)', marginBottom: 6 }}>
+              处理器（按执行顺序）
+            </div>
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>序</th>
+                    <th>插件</th>
+                    <th>处理器</th>
+                    <th className="numeric">优先级</th>
+                    <th>状态</th>
+                    <th>风险</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {handlers.map((h, hi) => (
+                    <tr key={hi}>
+                      <td className="numeric text-muted">{hi + 1}</td>
+                      <td>
+                        <span className="text-mono">{h.plugin ?? '?'}</span>
+                        {h.reserved && (
+                          <span className="tag active" style={{ marginLeft: 4, fontSize: '0.7em' }}>保留</span>
+                        )}
+                      </td>
+                      <td className="text-mono">{h.handler ?? '-'}</td>
+                      <td className="numeric">{h.priority ?? 0}</td>
+                      <td>
+                        <span className={'tag ' + (h.enabled ? 'active' : 'inactive')}>
+                          {h.enabled ? '启用' : '禁用'}
+                        </span>
+                      </td>
+                      <td>
+                        {(h.risks ?? []).length === 0 ? (
+                          <span className="text-muted">-</span>
+                        ) : (
+                          (h.risks ?? []).map(renderRiskBadge)
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PluginDetail() {
   const { data, loading, error } = useApi<PluginData>('/plugin');
@@ -356,7 +537,8 @@ export default function PluginDetail() {
           <h2 className="section-title">🪝 钩子全景与冲突</h2>
           <p className="page-subtitle" style={{ marginBottom: 12 }}>
             AstrBot 所有 <code>@filter.on_xxx()</code> 钩子按优先级串行执行；
-            多插件监听同一钩子时，<strong>事件终止</strong>会静默掐断后续处理器，<strong>覆盖赋值</strong>会抹掉其它插件的修改。
+            <strong className="severity-high">高危</strong>仅标注运行时实证（真的发生过终止/覆盖），
+            <strong className="severity-medium">中低</strong>为静态潜在风险。
           </p>
 
           {hooks?.error ? (
@@ -367,109 +549,20 @@ export default function PluginDetail() {
             </div>
           ) : (
             <>
-              {/* 钩子冲突告警 */}
-              {hookConflicts.length > 0 && (
-                <div className="table-wrapper" style={{ marginBottom: 16 }}>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>类型</th>
-                        <th>严重级别</th>
-                        <th>钩子</th>
-                        <th>涉及插件</th>
-                        <th>说明</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {hookConflicts.map((c, i) => (
-                        <tr key={i}>
-                          <td>
-                            <span className="text-mono">{CONFLICT_TYPE_LABELS[c.type ?? ''] ?? c.type}</span>
-                          </td>
-                          <td className={severityClass(c.severity)}>{c.severity}</td>
-                          <td>{c.event_label ?? c.event_type ?? '-'}</td>
-                          <td style={{ maxWidth: 200 }}>
-                            {c.plugin ? (
-                              <span className="text-mono">{c.plugin}{c.handler ? `.${c.handler}` : ''}</span>
-                            ) : c.plugins && c.plugins.length > 0 ? (
-                              <span className="text-mono">{c.plugins.join(', ')}</span>
-                            ) : (
-                              '-'
-                            )}
-                          </td>
-                          <td style={{ whiteSpace: 'normal', fontSize: '0.85em' }}>{c.desc ?? '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              {/* 摘要条 */}
+              <div className="card" style={{ marginBottom: 12, padding: '10px 14px', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span><strong>{hooks?.total_handlers ?? 0}</strong> 个处理器</span>
+                <span><strong>{hooks?.total_event_types ?? 0}</strong> 类事件</span>
+                <span className="severity-medium"><strong>{hookConflicts.length}</strong> 条告警</span>
+                <span className="severity-high"><strong>{hookHighRisk}</strong> 高危</span>
+                {(hooks?.runtime_tracked?.length ?? 0) > 0 && (
+                  <span className="text-muted">运行时观测：{hooks?.runtime_tracked?.length} 类</span>
+                )}
+              </div>
 
-              {/* 钩子全景图：按事件分组 */}
+              {/* 按钩子折叠展示 */}
               {(hooks?.groups ?? []).map((g, gi) => (
-                <div key={gi} className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <strong>{g.label ?? g.event_type}</strong>
-                      <span className="text-mono" style={{ marginLeft: 8, fontSize: '0.8em', color: 'var(--text-muted)' }}>
-                        {g.event_type}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <span className="tag active">{g.count} 个处理器</span>
-                      {g.multi_plugin && (
-                        <span className="tag inactive">多插件</span>
-                      )}
-                      {g.risk_level === 'high' && (
-                        <span className="tag inactive" style={{ background: 'var(--error)' }}>高风险</span>
-                      )}
-                      {g.same_priority && (
-                        <span className="tag inactive">同优先级</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="table-wrapper">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>执行序</th>
-                          <th>插件</th>
-                          <th>处理器</th>
-                          <th className="numeric">优先级</th>
-                          <th>状态</th>
-                          <th>风险</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(g.handlers ?? []).map((h, hi) => (
-                          <tr key={hi}>
-                            <td className="numeric text-muted">{hi + 1}</td>
-                            <td>
-                              <span className="text-mono">{h.plugin ?? '?'}</span>
-                              {h.reserved && (
-                                <span className="tag active" style={{ marginLeft: 4, fontSize: '0.7em' }}>保留</span>
-                              )}
-                            </td>
-                            <td className="text-mono">{h.handler ?? '-'}</td>
-                            <td className="numeric">{h.priority ?? 0}</td>
-                            <td>
-                              <span className={'tag ' + (h.enabled ? 'active' : 'inactive')}>
-                                {h.enabled ? '启用' : '禁用'}
-                              </span>
-                            </td>
-                            <td>
-                              {(h.risks ?? []).length === 0 ? (
-                                <span className="text-muted">-</span>
-                              ) : (
-                                (h.risks ?? []).map(renderRiskBadge)
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <HookGroupCard key={gi} group={g} />
               ))}
 
               {(!hooks?.groups || hooks.groups.length === 0) && (

@@ -147,13 +147,11 @@ class PluginMixin:
         return result
 
     # ==================== 钩子(Hook)冲突分析 ====================
-    # AstrBot 的钩子机制：star_handlers_registry 是全局单例，
-    # 每个 @filter.on_xxx() 装饰器注册一条 StarHandlerMetadata，
-    # call_event_hook() 按优先级降序串行 await。
-    # 真实"冲突"是语义层面的：
-    #   A. event.stop_event() → 静默掐断后续同钩子处理器
-    #   B. 覆盖式赋值共享可变对象（req.system_prompt = / event.set_result）
-    #   C. 多 handler 同优先级 → 顺序由加载顺序决定，不稳定
+    # AstrBot 钩子机制：star_handlers_registry 全局单例，按优先级降序串行 await。
+    # 评估原则：
+    #   - 静态扫描只能识别"潜在风险" → 默认评 info / low
+    #   - 只有"运行时实证"（真的被 stop / 真的覆盖）才升级为 high
+    #   - 用户可基于实证告警精准定位问题，而非淹没在潜在风险里
 
     # 钩子事件类型 → 友好名称
     _HOOK_NAMES: dict[str, str] = {
@@ -175,12 +173,16 @@ class PluginMixin:
         "OnPlatformLoadedEvent": "平台加载完成",
     }
 
-    # 高风险钩子：共享可变对象，多插件修改可能互相覆盖/竞改
-    _HIGH_RISK_HOOKS = {
+    # 共享可变对象钩子：多插件同时改同一对象，覆盖/竞改风险更高
+    _SHARED_OBJ_HOOKS = {
         "OnLLMRequestEvent",         # req: ProviderRequest
         "OnDecoratingResultEvent",   # result: MessageEventResult
         "OnLLMResponseEvent",        # response: LLMResponse
     }
+
+    # 运行时观测缓冲：记录自身钩子真实见到的事件
+    # 结构: { event_type_name: { "calls": N, "stopped": M, "last_order": [...] } }
+    _hook_runtime_log: dict = {}
 
     def _get_star_registry(self):
         """安全获取全局 star_handlers_registry 单例。"""
@@ -200,15 +202,24 @@ class PluginMixin:
             return {}
 
     def _resolve_plugin_name(self, handler, star_map) -> str:
-        """从 handler 的模块路径解析所属插件名。"""
+        """从 handler 的模块路径解析所属插件名。
+
+        优先 star_map 精确匹配；失败则从 module_path 字符串兜底提取
+        （如 'astrbot_plugin_xxx.main' → 'astrbot_plugin_xxx'）。
+        """
         try:
-            module_path = getattr(handler, "handler_module_path", "")
+            module_path = getattr(handler, "handler_module_path", "") or ""
             meta = star_map.get(module_path)
-            if meta:
-                return getattr(meta, "name", "?") or "?"
+            if meta and getattr(meta, "name", None):
+                return meta.name
+            # 兜底：从 module_path 第一段提取（去掉 .main / .sub 后缀）
+            if module_path:
+                head = module_path.split(".")[0]
+                if head and head != "astrbot":
+                    return head
+            return "astrbot" if module_path.startswith("astrbot.") else "?"
         except Exception:
-            pass
-        return "?"
+            return "?"
 
     def _resolve_plugin_reserved(self, handler, star_map) -> bool:
         """判断 handler 所属插件是否为保留插件。"""
@@ -221,62 +232,222 @@ class PluginMixin:
             pass
         return False
 
-    def _read_handler_source(self, handler) -> str:
-        """读取 handler 函数的源码内容。"""
+    def _read_handler_body(self, handler) -> str:
+        """只读取 handler 函数自身的源码（不含文件其它部分）。
+
+        关键：必须用 inspect.getsource(handler_fn) 而非读取整个 .py 文件，
+        否则会把同文件中其它代码（注释、正则字符串、scan_security 等）误判为
+        handler 的行为，产生大量误报。
+        """
         try:
             fn = getattr(handler, "handler", None)
             if fn is None:
                 return ""
-            # 优先用源码文件全量读取（更稳健，能拿到行号）
-            fn_file = getattr(getattr(fn, "__code__", None), "co_filename", "")
-            if fn_file and os.path.isfile(fn_file):
-                with open(fn_file, "r", encoding="utf-8", errors="ignore") as f:
-                    return f.read()
+            return inspect.getsource(fn) or ""
+        except (OSError, TypeError):
+            # 取不到函数源码（动态包装/C 扩展），降级到空字符串
+            return ""
         except Exception:
-            pass
-        return ""
+            return ""
 
     def _scan_handler_risks(self, code: str) -> list:
-        """扫描 handler 源码中的风险点，返回风险标签列表。"""
+        """扫描 handler 函数体的静态风险点。"""
         risks = []
         if not code:
             return risks
+        # 移除注释和字符串字面量，避免把正则字符串/文档当代码匹配
+        cleaned = self._strip_python_noise(code)
         # A 类：事件终止（掐断后续 handler）
-        if re.search(r"\.stop_event\s*\(", code):
+        if re.search(r"\.stop_event\s*\(", cleaned):
             risks.append("event_stop")
-        # B 类：覆盖式赋值共享对象（非 += 形式）
-        if re.search(r"req\.system_prompt\s*=(?!\=)", code) and \
-           not re.search(r"req\.system_prompt\s*\+=", code):
+        # B 类：覆盖式赋值共享对象（仅 '=' 非 '+=' '=='）
+        if re.search(r"\breq\.system_prompt\s*=(?!\=)", cleaned) and \
+           not re.search(r"\breq\.system_prompt\s*\+=", cleaned):
             risks.append("overwrite_system_prompt")
-        if re.search(r"event\.set_result\s*\(", code):
+        if re.search(r"\bevent\.set_result\s*\(", cleaned):
             risks.append("overwrite_result")
         return risks
 
-    def _find_risk_lines(self, code: str, pattern: str) -> int:
-        """定位风险模式的首次出现行号。"""
+    @staticmethod
+    def _strip_python_noise(code: str) -> str:
+        """粗略剔除 Python 源码中的注释、字符串字面量。
+
+        用于静态风险扫描，避免把正则模式字符串/文档字符串误判为代码。
+        不追求 100% 精确（无法处理嵌套），但对风险关键字扫描足够稳健。
+        """
         try:
-            for i, line in enumerate(code.split("\n"), 1):
-                if re.search(pattern, line):
-                    return i
+            # 1) 去行注释
+            lines = []
+            for line in code.split("\n"):
+                # 简单处理：行内首个 # 之后视为注释（忽略字符串内的 #，足够用）
+                in_str = False
+                quote = ""
+                for i, ch in enumerate(line):
+                    if in_str:
+                        if ch == quote:
+                            in_str = False
+                    else:
+                        if ch in ('"', "'"):
+                            in_str = True
+                            quote = ch
+                        elif ch == "#":
+                            line = line[:i]
+                            break
+                lines.append(line)
+            text = "\n".join(lines)
+            # 2) 去多行/单行字符串字面量（替换为空白，保留行结构）
+            text = re.sub(r'"""[\s\S]*?"""', ' "" ', text)
+            text = re.sub(r"'''[\s\S]*?'''", " '' ", text)
+            text = re.sub(r'"(\\.|[^"\\])*"', ' "" ', text)
+            text = re.sub(r"'(\\.|[^'\\])*'", " '' ", text)
+            return text
+        except Exception:
+            return code
+
+    def _record_hook_runtime(self, event_type_name: str, stopped: bool, order: list) -> None:
+        """由自身注册的钩子调用，记录运行时实证数据。
+
+        Args:
+            event_type_name: 如 'OnLLMRequestEvent'
+            stopped: 本次事件是否被 stop
+            order: 本次实际执行顺序 [plugin_name, ...]
+        """
+        try:
+            slot = self._hook_runtime_log.setdefault(event_type_name, {
+                "calls": 0, "stopped": 0, "last_order": [], "last_ts": 0.0,
+            })
+            slot["calls"] += 1
+            if stopped:
+                slot["stopped"] += 1
+            slot["last_order"] = order[-20:]
+            slot["last_ts"] = __import__("time").time()
         except Exception:
             pass
-        return 0
+
+    def _build_hook_conflicts(self, et_name: str, label: str, handler_infos: list,
+                              plugins_involved: set, runtime: dict | None) -> list:
+        """为一个钩子构建冲突条目列表（按类型聚合，便于前端折叠展示）。"""
+        conflicts = []
+        is_shared_obj = et_name in self._SHARED_OBJ_HOOKS
+        external = {p for p in plugins_involved if p and p != "?"}
+        multi = len(external) > 1
+        priorities = [h.get("priority", 0) for h in handler_infos]
+        same_pri = multi and len(set(priorities)) <= 1
+
+        # 运行时实证数据
+        rt_calls = (runtime or {}).get("calls", 0)
+        rt_stopped = (runtime or {}).get("stopped", 0)
+        rt_stop_rate = (rt_stopped / rt_calls) if rt_calls else 0.0
+        has_rt = rt_calls > 0
+
+        # ① 多插件监听（静态潜在）
+        if multi:
+            base = f"「{label}」钩子被 {len(external)} 个插件同时监听"
+            if is_shared_obj:
+                desc = base + "，共享可变对象，存在潜在覆盖风险"
+            else:
+                desc = base + "，执行顺序由优先级/加载顺序决定"
+            # 仅静态 → low；若该钩子有运行时 stop 实证 → high
+            sev = "high" if (has_rt and rt_stopped > 0 and is_shared_obj) else \
+                  ("medium" if is_shared_obj else "low")
+            conflicts.append({
+                "type": "multi_handler",
+                "severity": sev,
+                "static": True,
+                "event_type": et_name,
+                "event_label": label,
+                "count": len(handler_infos),
+                "plugins": sorted(external),
+                "shared_obj": is_shared_obj,
+                "runtime_evidence": has_rt and rt_stopped > 0,
+                "desc": desc,
+            })
+
+        # ② 同优先级（静态潜在，仅 multi 时才有意义）
+        if same_pri:
+            conflicts.append({
+                "type": "same_priority",
+                "severity": "info",
+                "static": True,
+                "event_type": et_name,
+                "event_label": label,
+                "priority": priorities[0] if priorities else 0,
+                "plugins": sorted(external),
+                "desc": f"「{label}」钩子的 {len(handler_infos)} 个 handler 优先级全为 "
+                        f"{priorities[0] if priorities else 0}，执行顺序由插件加载顺序决定",
+            })
+
+        # ③ handler 级别：stop_event / 覆盖赋值（静态）
+        for h in handler_infos:
+            for risk in h.get("risks", []):
+                if risk == "event_stop":
+                    # 有运行时实证 stop → high；仅静态 → medium
+                    sev = "high" if (has_rt and rt_stopped > 0) else "medium"
+                    conflicts.append({
+                        "type": "event_stop",
+                        "severity": sev,
+                        "static": True,
+                        "runtime_evidence": has_rt and rt_stopped > 0,
+                        "event_type": et_name,
+                        "event_label": label,
+                        "plugin": h.get("plugin"),
+                        "handler": h.get("handler"),
+                        "desc": f"{h.get('plugin')}.{h.get('handler')} 可能调用 stop_event()",
+                    })
+                elif risk == "overwrite_system_prompt":
+                    conflicts.append({
+                        "type": "overwrite",
+                        "severity": "medium",
+                        "static": True,
+                        "event_type": et_name,
+                        "event_label": label,
+                        "plugin": h.get("plugin"),
+                        "handler": h.get("handler"),
+                        "desc": f"{h.get('plugin')}.{h.get('handler')} 覆盖式赋值 req.system_prompt",
+                    })
+                elif risk == "overwrite_result":
+                    conflicts.append({
+                        "type": "overwrite",
+                        "severity": "low",
+                        "static": True,
+                        "event_type": et_name,
+                        "event_label": label,
+                        "plugin": h.get("plugin"),
+                        "handler": h.get("handler"),
+                        "desc": f"{h.get('plugin')}.{h.get('handler')} 调用 event.set_result()",
+                    })
+
+        # ④ 运行时实证：真的发生过 stop
+        if has_rt and rt_stopped > 0:
+            conflicts.append({
+                "type": "runtime_stop",
+                "severity": "high",
+                "static": False,
+                "runtime_evidence": True,
+                "event_type": et_name,
+                "event_label": label,
+                "calls": rt_calls,
+                "stopped": rt_stopped,
+                "stop_rate": round(rt_stop_rate * 100, 1),
+                "last_order": (runtime or {}).get("last_order", []),
+                "desc": f"「{label}」运行时观测 {rt_calls} 次调用中有 {rt_stopped} 次 "
+                        f"({rt_stop_rate*100:.1f}%) 被 stop_event() 终止",
+            })
+
+        return conflicts
 
     def scan_hooks(self) -> dict:
         """钩子全景图 + 冲突检测。
 
-        返回结构：
-            total_handlers: 全部已注册 handler 数
-            groups: [{event_type, label, risk_level, handlers: [...], conflict_flags}]
-            conflicts: [{
-                type: "multi_handler" | "event_stop" | "overwrite" | "same_priority",
-                severity: "high"|"medium"|"low",
-                event_type, desc, involved: [plugin names]
-            }]
+        评级原则：
+          - static + 潜在风险 → info / low / medium（看是否共享对象钩子）
+          - 只有 runtime_evidence（真的发生过 stop）才评 high
+        运行时数据由本插件自身注册的全套钩子上报，零侵入其它插件。
         """
         registry = self._get_star_registry()
         if registry is None:
             return {"total_handlers": 0, "groups": [], "conflicts": [],
+                    "total_event_types": 0, "conflict_count": 0, "high_risk_count": 0,
                     "error": "无法访问 star_handlers_registry"}
 
         star_map = self._get_star_map()
@@ -297,11 +468,11 @@ class PluginMixin:
             total += 1
 
         groups = []
-        conflicts = []
+        all_conflicts = []
 
         for et_name, handlers in by_event.items():
             label = self._HOOK_NAMES.get(et_name, et_name)
-            is_high_risk = et_name in self._HIGH_RISK_HOOKS
+            is_shared_obj = et_name in self._SHARED_OBJ_HOOKS
             handler_infos = []
             plugins_involved = set()
 
@@ -310,127 +481,71 @@ class PluginMixin:
                     plugin_name = self._resolve_plugin_name(h, star_map)
                     reserved = self._resolve_plugin_reserved(h, star_map)
                     plugins_involved.add(plugin_name)
-                    priority = getattr(h, "extras_configs", {}).get("priority", 0)
-                    enabled = bool(getattr(h, "enabled", True))
-                    handler_name = getattr(h, "handler_name", "?")
-                    full_name = getattr(h, "handler_full_name", "?")
-                    src = self._read_handler_source(h)
-                    risks = self._scan_handler_risks(src)
-
-                    info = {
+                    body = self._read_handler_body(h)  # 只读函数体，修误报
+                    risks = self._scan_handler_risks(body)
+                    handler_infos.append({
                         "plugin": plugin_name,
                         "reserved": reserved,
-                        "handler": handler_name,
-                        "full_name": full_name,
-                        "priority": priority,
-                        "enabled": enabled,
+                        "handler": getattr(h, "handler_name", "?"),
+                        "full_name": getattr(h, "handler_full_name", "?"),
+                        "priority": getattr(h, "extras_configs", {}).get("priority", 0),
+                        "enabled": bool(getattr(h, "enabled", True)),
                         "risks": risks,
                         "desc": (getattr(h, "desc", "") or "").strip()[:120],
-                    }
-                    handler_infos.append(info)
-
-                    # 单 handler 级别冲突检测
-                    if "event_stop" in risks:
-                        conflicts.append({
-                            "type": "event_stop",
-                            "severity": "high",
-                            "event_type": et_name,
-                            "event_label": label,
-                            "plugin": plugin_name,
-                            "handler": handler_name,
-                            "desc": f"在「{label}」钩子中调用了 stop_event()，"
-                                    f"可能静默掐断其后所有同钩子处理器",
-                        })
-                    if "overwrite_system_prompt" in risks:
-                        line_no = self._find_risk_lines(src, r"req\.system_prompt\s*=(?!\=)")
-                        conflicts.append({
-                            "type": "overwrite",
-                            "severity": "medium",
-                            "event_type": et_name,
-                            "event_label": label,
-                            "plugin": plugin_name,
-                            "handler": handler_name,
-                            "line": line_no,
-                            "desc": f"在「{label}」钩子中覆盖式赋值 req.system_prompt，"
-                                    f"会抹掉其它插件对该字段的修改",
-                        })
-                    if "overwrite_result" in risks:
-                        conflicts.append({
-                            "type": "overwrite",
-                            "severity": "low",
-                            "event_type": et_name,
-                            "event_label": label,
-                            "plugin": plugin_name,
-                            "handler": handler_name,
-                            "desc": f"在「{label}」钩子中调用 event.set_result()，"
-                                    f"可能覆盖其它插件的装饰结果",
-                        })
+                    })
                 except Exception as e:
                     logger.debug(f"[359debug] 解析 handler 异常: {e}")
                     continue
 
-            # 按 priority 降序排（与框架执行顺序一致）
+            # 按 priority 降序（与框架执行顺序一致）
             handler_infos.sort(key=lambda x: -x.get("priority", 0))
 
-            # 组级别冲突：多插件监听同一钩子
-            external_plugins = {p for p in plugins_involved if p != "?"}
-            multi_handler = len(external_plugins) > 1
+            runtime = self._hook_runtime_log.get(et_name)
+            conflicts = self._build_hook_conflicts(
+                et_name, label, handler_infos, plugins_involved, runtime
+            )
 
-            # 组级别冲突：多 handler 但全部默认优先级（顺序不稳定）
-            priorities = [h.get("priority", 0) for h in handler_infos]
-            same_priority = multi_handler and len(set(priorities)) == 1
-
-            if multi_handler:
-                conflicts.append({
-                    "type": "multi_handler",
-                    "severity": "high" if is_high_risk else "medium",
-                    "event_type": et_name,
-                    "event_label": label,
-                    "count": len(handler_infos),
-                    "plugins": sorted(external_plugins),
-                    "desc": f"「{label}」钩子被 {len(external_plugins)} 个插件同时监听"
-                            + ("，该钩子会修改共享对象，存在覆盖风险" if is_high_risk else
-                               "，执行顺序由优先级/加载顺序决定"),
-                })
-            if same_priority:
-                conflicts.append({
-                    "type": "same_priority",
-                    "severity": "low",
-                    "event_type": et_name,
-                    "event_label": label,
-                    "priority": priorities[0] if priorities else 0,
-                    "plugins": sorted(external_plugins),
-                    "desc": f"「{label}」钩子的 {len(handler_infos)} 个 handler 优先级"
-                            f"全为 {priorities[0] if priorities else 0}，执行顺序由"
-                            f"插件加载顺序决定（不稳定）",
-                })
+            # 组 risk_level：取本组 conflicts 最高 severity
+            sev_rank = {"high": 3, "medium": 2, "low": 1, "info": 0}
+            group_risk = max(
+                (sev_rank.get(c.get("severity", "info"), 0) for c in conflicts),
+                default=0,
+            )
+            risk_level = next(
+                (k for k, v in sev_rank.items() if v == group_risk),
+                "info",
+            )
 
             groups.append({
                 "event_type": et_name,
                 "label": label,
-                "risk_level": "high" if is_high_risk else ("medium" if multi_handler else "low"),
+                "risk_level": risk_level,
+                "shared_obj": is_shared_obj,
                 "count": len(handler_infos),
-                "multi_plugin": multi_handler,
-                "same_priority": same_priority,
+                "multi_plugin": len({p for p in plugins_involved if p and p != "?"}) > 1,
+                "runtime": {
+                    "calls": (runtime or {}).get("calls", 0),
+                    "stopped": (runtime or {}).get("stopped", 0),
+                    "has_evidence": bool(runtime and runtime.get("stopped", 0) > 0),
+                } if runtime else None,
                 "handlers": handler_infos,
+                "conflicts": conflicts,  # 嵌入到组内，便于前端折叠展示
             })
+            all_conflicts.extend(conflicts)
 
-        # 组排序：高风险 + 多 handler 的优先展示
-        groups.sort(key=lambda g: (
-            0 if g["risk_level"] == "high" else 1 if g["risk_level"] == "medium" else 2,
-            -g["count"],
-        ))
-        # 冲突排序：severity high→low
-        sev_order = {"high": 0, "medium": 1, "low": 2}
-        conflicts.sort(key=lambda c: sev_order.get(c.get("severity", "low"), 3))
+        # 组排序：风险高的在前
+        groups.sort(key=lambda g: -sev_rank.get(g["risk_level"], 0))
+        # 冲突排序：severity high→info
+        all_conflicts.sort(key=lambda c: -sev_rank.get(c.get("severity", "info"), 0))
 
         return {
             "total_handlers": total,
             "total_event_types": len(groups),
             "groups": groups,
-            "conflicts": conflicts,
-            "conflict_count": len(conflicts),
-            "high_risk_count": sum(1 for c in conflicts if c.get("severity") == "high"),
+            "conflicts": all_conflicts,
+            "conflict_count": len(all_conflicts),
+            "high_risk_count": sum(1 for c in all_conflicts if c.get("severity") == "high"),
+            "runtime_tracked": list(self._hook_runtime_log.keys()),
         }
 
     async def get_plugin_detail(self) -> dict:
