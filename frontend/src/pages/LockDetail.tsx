@@ -8,6 +8,7 @@
  */
 import { Link } from 'react-router-dom';
 import { useApi } from '../api/bridge';
+import { StateBox } from '../components/StateBox';
 
 interface LockSession {
   umo: string;
@@ -80,17 +81,7 @@ export default function LockDetail() {
         检测长时间持锁、请求堆积与潜在死锁风险
       </p>
 
-      {loading && (
-        <div className="state-box">
-          <div className="state-box__spinner" />
-          <div>加载中...</div>
-        </div>
-      )}
-      {error && !loading && (
-        <div className="state-box state-box--error">
-          <div>加载失败：{error}</div>
-        </div>
-      )}
+      <StateBox loading={loading} error={error} />
 
       {data && !loading && (
         <>

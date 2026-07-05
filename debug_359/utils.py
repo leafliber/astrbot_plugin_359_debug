@@ -5,53 +5,15 @@
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import re
 import time
-from collections.abc import Awaitable, Callable
-from typing import Any, Iterable
-
-from astrbot.api import logger
+from typing import Iterable
 
 
 def now_ts() -> float:
     """当前 Unix 时间戳（秒）。"""
     return time.time()
-
-
-def safe_call(coro_or_fn: Any, *args, **kwargs) -> Any:
-    """安全执行：包装协程/函数，永不抛出异常（保护主流程）。
-
-    - 传入协程：await 后捕获异常
-    - 传入普通函数：直接调用捕获异常
-    """
-    try:
-        if asyncio.iscoroutine(coro_or_fn):
-            return _SafeAwaitable(coro_or_fn)
-        if callable(coro_or_fn):
-            return coro_or_fn(*args, **kwargs)
-        return coro_or_fn
-    except Exception as e:
-        logger.debug(f"[359debug] safe_call 拦截异常: {e}")
-        return None
-
-
-class _SafeAwaitable:
-    """包装协程使其 await 时捕获异常。"""
-
-    def __init__(self, coro):
-        self._coro = coro
-
-    def __await__(self):
-        return self._await().__await__()
-
-    async def _await(self):
-        try:
-            return await self._coro
-        except Exception as e:
-            logger.debug(f"[359debug] safe_call await 拦截异常: {e}")
-            return None
 
 
 def percentile(values: Iterable[float], p: float) -> float:
@@ -146,23 +108,6 @@ def health_score_from_metric(value: float, thresholds: list[tuple[float, int]]) 
     return thresholds[-1][1] if thresholds else 0
 
 
-def clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
-    """限制值范围。"""
-    return max(lo, min(hi, v))
-
-
-def safe_get(obj: Any, *attrs, default: Any = None) -> Any:
-    """安全链式取属性：safe_get(obj, 'a', 'b', 'c', default=0)。"""
-    for attr in attrs:
-        try:
-            obj = getattr(obj, attr)
-        except Exception:
-            return default
-        if obj is None:
-            return default
-    return obj if obj is not None else default
-
-
 def estimate_tokens(text: str) -> int:
     """粗略估算 token 数（中文≈1.5字/token，英文≈4字符/token，取折中）。"""
     if not text:
@@ -170,19 +115,3 @@ def estimate_tokens(text: str) -> int:
     cn = len(re.findall(r"[\u4e00-\u9fff]", text))
     other = len(text) - cn
     return int(cn * 1.5 + other / 4)
-
-
-def format_oneline(prefix: str, items: list[str], alert: int = 0,
-                   hint: str = "完整报告见 Pages") -> str:
-    """格式化一行摘要输出（指令用）。
-
-    >>> format_oneline("运行", ["n=42", "avg=2.3s", "p95=5.1s"], alert=2)
-    '运行 ▸ n=42 avg=2.3s p95=5.1s ⚠2慢 | 完整报告见 Pages'
-    """
-    parts = [f"{prefix} ▸"] + items
-    if alert > 0:
-        parts.append(f"⚠{alert}慢")
-    line = " ".join(parts)
-    if hint:
-        line += f" | {hint}"
-    return line

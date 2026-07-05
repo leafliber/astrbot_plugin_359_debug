@@ -199,11 +199,11 @@ class StoreMixin:
         # 6. 缓冲区大小
         report["buffers"] = {
             "runtime_buf": len(self._runtime_buf),
+            "token_buf": len(self._token_buf),
             "tool_buf": len(self._tool_buf),
             "context_last_keys": len(self._context_last),
             "context_history": len(self._context_history),
             "alert_history": len(self._alert_history),
-            "token_cache": len(self._token_cache) if hasattr(self, "_token_cache") else "N/A",
         }
 
         # 7. 运行时链路完整性（哪个环节断了）
@@ -319,42 +319,12 @@ class StoreMixin:
             logger.warning(f"[359debug] 查询指令冲突失败: {e}")
             return []
 
-    async def query_platform_stats(self, offset_sec: int = 86400) -> list:
-        """查询平台调用统计。"""
-        db = self._get_db()
-        try:
-            return await db.get_platform_stats(offset_sec)
-        except Exception as e:
-            logger.warning(f"[359debug] 查询平台统计失败: {e}")
-            return []
-
-    async def query_conversations(self, umo: str | None = None) -> list:
-        """查询会话列表。"""
-        db = self._get_db()
-        try:
-            if umo:
-                return await db.get_conversations()
-            return await db.get_all_conversations(page=1, page_size=50)
-        except Exception as e:
-            logger.warning(f"[359debug] 查询会话失败: {e}")
-            return []
-
     # ==================== 内存缓冲 ====================
 
     def record_runtime(self, event_id: int, stage: str, ts: float, umo: str = "") -> None:
         """记录运行时阶段时间戳。"""
         t = self._timings.setdefault(event_id, {"umo": umo})
         t[stage] = ts
-
-    def finish_runtime(self, event_id: int, stage: str, ts: float) -> None:
-        """完成一个阶段，计算耗时并写入缓冲。"""
-        t = self._timings.get(event_id, {})
-        start = t.get(stage + "_start") or t.get("enter")
-        if start:
-            dur = ts - start
-            self._runtime_buf.append({
-                "ts": ts, "umo": t.get("umo", ""), "stage": stage, "dur": dur,
-            })
 
     def record_token(self, provider: str, model: str, usage: dict, umo: str = "") -> None:
         """记录单次 token 用量到缓冲。"""
@@ -395,6 +365,9 @@ class StoreMixin:
     def cleanup_event(self, event_id: int) -> None:
         """清理已完成事件的计时数据（防泄漏）。"""
         self._timings.pop(event_id, None)
+        self._tool_timings.pop(event_id, None)
+        self._ctx_head_snapshots.pop(event_id, None)
+        self._agent_temp.pop(event_id, None)
 
     # ==================== 缓冲读取 ====================
 
@@ -540,11 +513,6 @@ class StoreMixin:
             return bool(cfg.get("log_file_enable", False))
         except Exception:
             return False
-
-    def get_trace_log_path(self) -> str:
-        """解析 trace 日志路径。"""
-        base = os.environ.get("ASTRBOT_DATA_PATH") or os.getcwd()
-        return os.path.join(base, "logs", "astrbot.trace.log")
 
     # ==================== 生命周期 ====================
 

@@ -11,6 +11,8 @@ import {
 } from 'recharts';
 import { useApi } from '../api/bridge';
 import { chartColors } from '../theme-utils';
+import { fmt, pct } from '../utils';
+import { StateBox } from '../components/StateBox';
 
 interface ToolRank {
   name?: string;
@@ -41,20 +43,6 @@ interface ToolData {
   agent_trajectories?: Trajectory[];
 }
 
-const fmt = (v: unknown): string => {
-  if (v === null || v === undefined || v === '') return '-';
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return n.toLocaleString('zh-CN');
-};
-
-const pct = (v: unknown): string => {
-  if (v === null || v === undefined || v === '') return '-';
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return n.toFixed(1) + '%';
-};
-
 export default function ToolDetail() {
   const { data, loading, error } = useApi<ToolData>('/tool');
   const tc = chartColors();
@@ -79,18 +67,7 @@ export default function ToolDetail() {
       <h1 className="page-title">🔧 工具调用分析</h1>
       <p className="page-subtitle">工具使用频率、耗时分布与 Agent 轨迹</p>
 
-      {loading && (
-        <div className="state-box">
-          <div className="state-box__spinner" />
-          <div>加载中...</div>
-        </div>
-      )}
-      {error && !loading && (
-        <div className="state-box state-box--error">
-          <div className="state-box__spinner" />
-          <div>加载失败：{error}</div>
-        </div>
-      )}
+      <StateBox loading={loading} error={error} />
 
       {data && !loading && (
         <>

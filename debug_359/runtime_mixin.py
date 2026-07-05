@@ -13,7 +13,7 @@ from typing import Any
 from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
 
-from .utils import avg, fmt_duration, percentile, safe_call, now_ts, health_score_from_metric
+from .utils import avg, fmt_duration, percentile, health_score_from_metric
 
 
 class RuntimeMixin:

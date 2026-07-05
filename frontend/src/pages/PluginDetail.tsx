@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../api/bridge';
+import { formatTs, fmt } from '../utils';
+import { StateBox } from '../components/StateBox';
 
 interface PluginRow {
   name?: string;
@@ -113,22 +115,6 @@ interface PluginData {
   hooks?: HooksReport;
   lifecycle_log?: LifecycleEvent[];
 }
-
-const fmt = (v: unknown): string => {
-  if (v === null || v === undefined || v === '') return '-';
-  return String(v);
-};
-
-const formatTs = (ts: number | string | undefined): string => {
-  if (!ts) return '-';
-  if (typeof ts === 'number') {
-    // 后端 time.time() 返回秒级，new Date 需要毫秒；阈值 1e12 = 2001年
-    const ms = ts > 1e12 ? ts : ts * 1000;
-    const d = new Date(ms);
-    return isNaN(d.getTime()) ? String(ts) : d.toLocaleString('zh-CN', { hour12: false });
-  }
-  return ts;
-};
 
 const severityClass = (sev: string | undefined): string => {
   const s = (sev || '').toLowerCase();
@@ -367,18 +353,7 @@ export default function PluginDetail() {
       <h1 className="page-title">🧩 插件分析</h1>
       <p className="page-subtitle">插件清单、安全审计、冲突检测与生命周期</p>
 
-      {loading && (
-        <div className="state-box">
-          <div className="state-box__spinner" />
-          <div>加载中...</div>
-        </div>
-      )}
-      {error && !loading && (
-        <div className="state-box state-box--error">
-          <div className="state-box__spinner" />
-          <div>加载失败：{error}</div>
-        </div>
-      )}
+      <StateBox loading={loading} error={error} />
 
       {data && !loading && (
         <>

@@ -67,7 +67,7 @@ class WebApiMixin:
             "context": self.get_context_health(),
             "tool": self.get_tool_health(),
             "log": self.get_log_health(),
-            "plugin": self.get_plugin_health(),
+            "plugin": await self.get_plugin_health(),
             "lock": self.get_lock_health(),
         }
         score = round(sum(radar.values()) / len(radar)) if radar else 0

@@ -325,33 +325,17 @@ class PluginMixin:
         """粗略剔除 Python 源码中的注释、字符串字面量。
 
         用于静态风险扫描，避免把正则模式字符串/文档字符串误判为代码。
-        不追求 100% 精确（无法处理嵌套），但对风险关键字扫描足够稳健。
+        采用正则方案，足够稳健且简洁。
         """
         try:
-            # 1) 去行注释
-            lines = []
-            for line in code.split("\n"):
-                # 简单处理：行内首个 # 之后视为注释（忽略字符串内的 #，足够用）
-                in_str = False
-                quote = ""
-                for i, ch in enumerate(line):
-                    if in_str:
-                        if ch == quote:
-                            in_str = False
-                    else:
-                        if ch in ('"', "'"):
-                            in_str = True
-                            quote = ch
-                        elif ch == "#":
-                            line = line[:i]
-                            break
-                lines.append(line)
-            text = "\n".join(lines)
-            # 2) 去多行/单行字符串字面量（替换为空白，保留行结构）
-            text = re.sub(r'"""[\s\S]*?"""', ' "" ', text)
-            text = re.sub(r"'''[\s\S]*?'''", " '' ", text)
+            # 1) 去多行字符串（docstring）— 优先处理避免被单行规则破坏
+            text = re.sub(r'"""[\s\S]*?"""', ' ', code)
+            text = re.sub(r"'''[\s\S]*?'''", " ", text)
+            # 2) 去单行字符串字面量
             text = re.sub(r'"(\\.|[^"\\])*"', ' "" ', text)
             text = re.sub(r"'(\\.|[^'\\])*'", " '' ", text)
+            # 3) 去行注释（字符串已移除，# 必为注释）
+            text = re.sub(r'#[^\n]*', '', text)
             return text
         except Exception:
             return code
@@ -645,19 +629,14 @@ class PluginMixin:
             "lifecycle_log": list(self._lifecycle_log),
         }
 
-    def get_plugin_health(self) -> int:
+    async def get_plugin_health(self) -> int:
         """插件健康度评分。综合安全告警 / 指令冲突 / 钩子冲突。"""
         security_alerts = self.scan_security()
         high = sum(1 for a in security_alerts if a.get("severity") == "high")
-        # 指令冲突检查用同步方式查缓冲（避免在同步方法中跑 async）
+        # 指令冲突检查（async 查询 DB）
         try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 在事件循环内，无法同步等待，用安全告警近似
-                conflicts_count = 0
-            else:
-                conflicts_count = len(loop.run_until_complete(self.get_conflicts()))
+            conflicts = await self.get_conflicts()
+            conflicts_count = len(conflicts)
         except Exception:
             conflicts_count = 0
         # 钩子冲突（同步扫描，零副作用）

@@ -37,13 +37,6 @@ const MODULES = [
   { key: 'enable_plugin_analysis', title: '插件健康', desc: '插件冲突检测与生命周期审计' },
 ] as const;
 
-/** 持久化方式选项 */
-const PERSIST_OPTIONS = [
-  { value: 'kv', label: 'KV 存储（推荐）' },
-  { value: 'db', label: '数据库' },
-  { value: 'memory', label: '内存（重启丢失）' },
-];
-
 export default function Settings() {
   const { data, loading } = useApi<{ config: PluginConfig }>('/settings');
   const [config, setConfig] = useState<PluginConfig | null>(null);
@@ -252,20 +245,8 @@ export default function Settings() {
       <div className="card">
         <div className="form-row">
           <label className="form-row__label">Token 数据持久化</label>
-          <select
-            className="input"
-            style={{ width: 'auto', minWidth: 200 }}
-            value={String(config.token_persist_to ?? 'kv')}
-            onChange={(e) => update('token_persist_to', e.target.value)}
-          >
-            {PERSIST_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
           <span className="form-row__desc">
-            Token 统计数据的持久化方式（默认 KV 存储）
+            Token 统计数据通过 AstrBot KV 存储持久化（重启不丢失）
           </span>
         </div>
       </div>

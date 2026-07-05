@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useApi } from '../api/bridge';
+import { fmt } from '../utils';
+import { StateBox } from '../components/StateBox';
 
 /** 后端返回结构：stages / by_provider / by_platform 均为 dict */
 interface StageStat {
@@ -16,13 +18,6 @@ interface RuntimeData {
   by_platform?: Record<string, StageStat>;
   by_umo?: Record<string, StageStat>;
 }
-
-const fmt = (v: unknown, digits = 3): string => {
-  if (v === null || v === undefined || v === '') return '-';
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return n.toFixed(digits);
-};
 
 const STAGE_LABELS: Record<string, string> = {
   enter: '进入链路 (enter)',
@@ -51,18 +46,7 @@ export default function RuntimeDetail() {
       <h1 className="page-title">⏱ 运行时分析</h1>
       <p className="page-subtitle">请求各阶段耗时分布 · 多提供商/平台对比</p>
 
-      {loading && (
-        <div className="state-box">
-          <div className="state-box__spinner" />
-          <div>加载中...</div>
-        </div>
-      )}
-      {error && !loading && (
-        <div className="state-box state-box--error">
-          <div className="state-box__spinner" />
-          <div>加载失败：{error}</div>
-        </div>
-      )}
+      <StateBox loading={loading} error={error} />
 
       {data && !loading && (
         <>
@@ -74,12 +58,12 @@ export default function RuntimeDetail() {
             </div>
             <div className="stat-block">
               <div className="stat-block__label">TTFT 平均</div>
-              <div className="stat-block__value">{fmt(data?.ttft?.avg)}</div>
+              <div className="stat-block__value">{fmt(data?.ttft?.avg, 3)}</div>
               <div className="stat-block__sub">秒</div>
             </div>
             <div className="stat-block">
               <div className="stat-block__label">TTFT P95</div>
-              <div className="stat-block__value text-warning">{fmt(data?.ttft?.p95)}</div>
+              <div className="stat-block__value text-warning">{fmt(data?.ttft?.p95, 3)}</div>
               <div className="stat-block__sub">秒</div>
             </div>
             <div className="stat-block">
@@ -106,9 +90,9 @@ export default function RuntimeDetail() {
                   <tr key={name}>
                     <td>{STAGE_LABELS[name] ?? name}</td>
                     <td className="numeric">{s.n ?? '-'}</td>
-                    <td className="numeric">{fmt(s.avg)}</td>
-                    <td className="numeric">{fmt(s.p50)}</td>
-                    <td className="numeric cell-warn">{fmt(s.p95)}</td>
+                    <td className="numeric">{fmt(s.avg, 3)}</td>
+                    <td className="numeric">{fmt(s.p50, 3)}</td>
+                    <td className="numeric cell-warn">{fmt(s.p95, 3)}</td>
                   </tr>
                 ))}
                 {stages.length === 0 && (
@@ -127,17 +111,17 @@ export default function RuntimeDetail() {
           <div className="stat-grid">
             <div className="stat-block">
               <div className="stat-block__label">平均</div>
-              <div className="stat-block__value">{fmt(data?.ttft?.avg)}</div>
+              <div className="stat-block__value">{fmt(data?.ttft?.avg, 3)}</div>
               <div className="stat-block__sub">秒</div>
             </div>
             <div className="stat-block">
               <div className="stat-block__label">P50</div>
-              <div className="stat-block__value">{fmt(data?.ttft?.p50)}</div>
+              <div className="stat-block__value">{fmt(data?.ttft?.p50, 3)}</div>
               <div className="stat-block__sub">秒</div>
             </div>
             <div className="stat-block">
               <div className="stat-block__label">P95</div>
-              <div className="stat-block__value text-warning">{fmt(data?.ttft?.p95)}</div>
+              <div className="stat-block__value text-warning">{fmt(data?.ttft?.p95, 3)}</div>
               <div className="stat-block__sub">秒</div>
             </div>
           </div>
@@ -159,8 +143,8 @@ export default function RuntimeDetail() {
                   <tr key={name}>
                     <td>{name}</td>
                     <td className="numeric">{p.n ?? '-'}</td>
-                    <td className="numeric">{fmt(p.avg)}</td>
-                    <td className="numeric cell-warn">{fmt(p.p95)}</td>
+                    <td className="numeric">{fmt(p.avg, 3)}</td>
+                    <td className="numeric cell-warn">{fmt(p.p95, 3)}</td>
                   </tr>
                 ))}
                 {providers.length === 0 && (
@@ -191,8 +175,8 @@ export default function RuntimeDetail() {
                   <tr key={name}>
                     <td>{name || 'unknown'}</td>
                     <td className="numeric">{p.n ?? '-'}</td>
-                    <td className="numeric">{fmt(p.avg)}</td>
-                    <td className="numeric cell-warn">{fmt(p.p95)}</td>
+                    <td className="numeric">{fmt(p.avg, 3)}</td>
+                    <td className="numeric cell-warn">{fmt(p.p95, 3)}</td>
                   </tr>
                 ))}
                 {platforms.length === 0 && (

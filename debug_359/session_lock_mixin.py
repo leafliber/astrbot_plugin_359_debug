@@ -36,13 +36,18 @@ class SessionLockMixin:
     # ==================== 内部探针 ====================
 
     def _get_loop_lock_manager(self) -> Any | None:
-        """获取当前事件循环对应的 _PerLoopSessionLockManager。"""
+        """获取当前事件循环对应的 _PerLoopSessionLockManager。
+
+        兼容同步和异步上下文：优先 get_running_loop（async），
+        回退到 get_event_loop（sync，如 get_lock_health 在非协程中调用）。
+        """
         try:
             from astrbot.core.utils.session_lock import session_lock_manager
-            loop = asyncio.get_running_loop()
-            # WeakKeyDictionary，按事件循环查找
-            mgr = session_lock_manager._loop_managers.get(loop)
-            return mgr
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.get_event_loop()
+            return session_lock_manager._loop_managers.get(loop)
         except Exception as e:
             logger.debug(f"[359debug] 无法获取 session_lock_manager: {e}")
             return None
@@ -263,53 +268,8 @@ class SessionLockMixin:
         return f"锁 ▸ {' '.join(parts)}{suffix} | 完整报告见 Pages"
 
     def _probe_session_locks_sync(self) -> list[dict[str, Any]]:
-        """同步版本的锁探测（get_lock_health 在同步上下文中调用）。"""
-        result: list[dict[str, Any]] = []
-        try:
-            from astrbot.core.utils.session_lock import session_lock_manager
-            loop = asyncio.get_event_loop()
-            mgr = session_lock_manager._loop_managers.get(loop)
-            if not mgr:
-                return result
-            locks_dict: dict = getattr(mgr, "_locks", {})
-            count_dict: dict = getattr(mgr, "_lock_count", {})
-            for umo, lock in locks_dict.items():
-                try:
-                    locked = lock.locked()
-                    waiters = getattr(lock, "_waiters", None)
-                    waiter_count = len(waiters) if waiters else 0
-                    acquired_at = getattr(lock, "_359_acquired_at", None)
-                    hold_secs = (time.monotonic() - acquired_at) if acquired_at else 0
-                    level = "ok"
-                    if locked and waiter_count >= WAITER_WARN_THRESHOLD:
-                        level = "warn"
-                    if hold_secs >= HOLD_DANGER_THRESHOLD:
-                        level = "danger"
-                    elif hold_secs >= HOLD_WARN_THRESHOLD and level == "warn":
-                        level = "danger"
-                    n_locked = locked
-                    result.append({
-                        "umo": umo,
-                        "locked": locked,
-                        "waiters": waiter_count,
-                        "hold_secs": round(hold_secs, 1),
-                        "level": level,
-                        "refcount": count_dict.get(umo, 0),
-                    })
-                except Exception:
-                    continue
-        except Exception as e:
-            logger.debug(f"[359debug] 同步锁探测失败: {e}")
-        return result
+        """同步版本的锁探测（get_lock_health 在同步上下文中调用）。
 
-    async def get_lock_report(self) -> dict[str, Any]:
-        """完整报告（供 AI 体检 / 指令调用）。"""
-        detail = await self.get_lock_detail()
-        health = self.get_lock_health()
-        return {
-            "score": health["score"],
-            "status": health["status"],
-            "summary": health["summary"],
-            "alerts": health["alerts"],
-            "detail": detail,
-        }
+        _get_loop_lock_manager 已兼容同步上下文，直接复用 _probe_session_locks。
+        """
+        return self._probe_session_locks()

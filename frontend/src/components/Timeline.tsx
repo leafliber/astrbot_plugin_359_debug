@@ -1,3 +1,5 @@
+import { formatTs } from '../utils';
+
 export interface TimelineItem {
   /** 时间戳（秒级或毫秒级，formatTs 会自动兼容） */
   ts: number | string;
@@ -13,18 +15,6 @@ export interface TimelineItem {
 
 export interface TimelineProps {
   items: TimelineItem[];
-}
-
-function formatTs(ts: number | string): string {
-  if (!ts) return '';
-  if (typeof ts === 'number') {
-    // 后端 time.time() 返回秒级，new Date 需要毫秒；阈值 1e12 = 2001年
-    const ms = ts > 1e12 ? ts : ts * 1000;
-    const d = new Date(ms);
-    if (isNaN(d.getTime())) return String(ts);
-    return d.toLocaleString('zh-CN', { hour12: false });
-  }
-  return ts;
 }
 
 /** 规范化级别，便于匹配 CSS 类 */

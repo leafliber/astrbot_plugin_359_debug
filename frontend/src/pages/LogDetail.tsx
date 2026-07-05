@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../api/bridge';
+import { formatTs, fmt } from '../utils';
+import { StateBox } from '../components/StateBox';
 
 interface LogEntry {
   time?: number | string;
@@ -64,24 +66,6 @@ interface LogData {
   diagnosis?: DiagnosisReport;
 }
 
-const fmt = (v: unknown): string => {
-  if (v === null || v === undefined || v === '') return '0';
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return n.toLocaleString('zh-CN');
-};
-
-const formatTs = (ts: number | string | undefined): string => {
-  if (!ts) return '-';
-  if (typeof ts === 'number') {
-    // 后端 time.time() 返回秒级，new Date 需要毫秒；阈值 1e12 = 2001年
-    const ms = ts > 1e12 ? ts : ts * 1000;
-    const d = new Date(ms);
-    return isNaN(d.getTime()) ? String(ts) : d.toLocaleString('zh-CN', { hour12: false });
-  }
-  return ts;
-};
-
 const levelClass = (level: string): string => {
   const u = (level || '').toUpperCase();
   if (['ERROR', 'FATAL', 'CRITICAL'].includes(u)) return 'cell-error';
@@ -135,18 +119,7 @@ export default function LogDetail() {
       <h1 className="page-title">📋 错误日志分析</h1>
       <p className="page-subtitle">日志级别分布、错误聚合与文件可用性检查</p>
 
-      {loading && (
-        <div className="state-box">
-          <div className="state-box__spinner" />
-          <div>加载中...</div>
-        </div>
-      )}
-      {error && !loading && (
-        <div className="state-box state-box--error">
-          <div className="state-box__spinner" />
-          <div>加载失败：{error}</div>
-        </div>
-      )}
+      <StateBox loading={loading} error={error} />
 
       {data && !loading && (
         <>

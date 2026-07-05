@@ -23,8 +23,9 @@ class ContextMixin:
     async def _ctx_on_req_head(self, event: AstrMessageEvent, req) -> None:
         """head：其他插件修改前，记录 system_prompt 原态。
 
-        重要：head 钩子也调用 record_context()，确保即使 tail 钩子
-        因 event.stop_event() 被跳过，上下文数据仍然有记录。
+        head 钩子只缓存快照，不写入 _context_history。
+        由 tail 钩子负责写入完整快照（含 head/tail 对比）。
+        如果 tail 被 stop 跳过，head 缓存会在 cleanup_event 中清理。
         """
         self._hb("_ctx_on_req_head", event=event, event_type="OnLLMRequestEvent")
         if not self.is_enabled("context_dump"):
@@ -33,13 +34,8 @@ class ContextMixin:
             sp = getattr(req, "system_prompt", "") or ""
             eid = id(event)
             self._ctx_head_snapshots[eid] = sp
-
-            # head 阶段也立即记录快照（防止 tail 被 stop 跳过导致无数据）
-            umo = event.unified_msg_origin
-            snapshot = self._ctx_build_snapshot(umo, req, sp, head_sp=sp, tail_fired=False)
-            self.record_context(umo, snapshot)
             logger.debug(
-                f"[359debug] ctx head hook: sp_len={len(sp)}, umo={umo}"
+                f"[359debug] ctx head hook: sp_len={len(sp)}, umo={event.unified_msg_origin}"
             )
         except Exception as e:
             logger.warning(f"[359debug] 上下文 head hook 异常: {e}", exc_info=True)
@@ -241,12 +237,6 @@ class ContextMixin:
                 }
         except Exception as e:
             logger.debug(f"[359debug] 输出链装饰记录异常: {e}")
-
-    def get_output_chain(self, umo: str | None = None) -> dict:
-        """获取最近一次输出链装饰信息。"""
-        snap = self._context_last.get(umo, {}) if umo else \
-               (list(self._context_last.values())[-1] if self._context_last else {})
-        return snap.get("output_chain", {"available": False})
 
     def detect_cache_disruption(self, umo: str | None = None) -> bool:
         """是否检测到缓存破坏。"""

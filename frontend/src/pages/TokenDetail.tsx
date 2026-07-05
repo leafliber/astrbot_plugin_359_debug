@@ -8,6 +8,8 @@ import {
 } from 'recharts';
 import { useApi } from '../api/bridge';
 import { chartColors } from '../theme-utils';
+import { fmt, pct, PIE_COLORS } from '../utils';
+import { StateBox } from '../components/StateBox';
 
 interface ModelRow {
   key?: string;
@@ -34,18 +36,6 @@ interface TokenData {
   source?: string;
 }
 
-const PIE_COLORS = [
-  '#4CAF50', '#2196F3', '#FF9800', '#9C27B0',
-  '#f44336', '#00BCD4', '#FFEB3B', '#E91E63',
-];
-
-const fmt = (v: unknown): string => {
-  if (v === null || v === undefined || v === '') return '-';
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return n.toLocaleString('zh-CN');
-};
-
 /** 紧凑数字格式化（K/M/G），避免大数字撑破容器 */
 const fmtCompact = (v: unknown): string => {
   if (v === null || v === undefined || v === '') return '-';
@@ -56,13 +46,6 @@ const fmtCompact = (v: unknown): string => {
   if (abs >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
   if (abs >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return String(n);
-};
-
-const pct = (v: unknown): string => {
-  if (v === null || v === undefined || v === '') return '-';
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return n.toFixed(1) + '%';
 };
 
 export default function TokenDetail() {
@@ -83,18 +66,7 @@ export default function TokenDetail() {
       <h1 className="page-title">🪙 Token 用量分析</h1>
       <p className="page-subtitle">模型调用量、Token 消耗与缓存命中</p>
 
-      {loading && (
-        <div className="state-box">
-          <div className="state-box__spinner" />
-          <div>加载中...</div>
-        </div>
-      )}
-      {error && !loading && (
-        <div className="state-box state-box--error">
-          <div className="state-box__spinner" />
-          <div>加载失败：{error}</div>
-        </div>
-      )}
+      <StateBox loading={loading} error={error} />
 
       {data && !loading && (
         <>

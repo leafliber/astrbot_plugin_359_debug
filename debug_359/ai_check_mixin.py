@@ -108,7 +108,7 @@ class AiCheckMixin:
         # 6. 插件
         try:
             modules["plugin"] = {
-                "score": self.get_plugin_health(),
+                "score": await self.get_plugin_health(),
                 "detail": await self.get_plugin_detail(),
             }
         except Exception as e:

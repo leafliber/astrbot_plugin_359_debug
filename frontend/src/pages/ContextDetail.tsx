@@ -9,6 +9,8 @@ import {
 } from 'recharts';
 import { useApi } from '../api/bridge';
 import { chartColors } from '../theme-utils';
+import { formatTs, fmt, PIE_COLORS } from '../utils';
+import { StateBox } from '../components/StateBox';
 
 interface OutputChain {
   available?: boolean;
@@ -64,26 +66,6 @@ interface ContextData {
   system_prompt?: string;
 }
 
-const PIE_COLORS = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0'];
-
-const fmt = (v: unknown): string => {
-  if (v === null || v === undefined || v === '') return '-';
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return n.toLocaleString('zh-CN');
-};
-
-const formatTs = (ts: number | string | undefined): string => {
-  if (!ts) return '-';
-  if (typeof ts === 'number') {
-    // 后端 time.time() 返回秒级，new Date 需要毫秒；阈值 1e12 = 2001年
-    const ms = ts > 1e12 ? ts : ts * 1000;
-    const d = new Date(ms);
-    return isNaN(d.getTime()) ? String(ts) : d.toLocaleString('zh-CN', { hour12: false });
-  }
-  return ts;
-};
-
 export default function ContextDetail() {
   const { data, loading, error } = useApi<ContextData>('/context');
   const tc = chartColors();
@@ -108,18 +90,7 @@ export default function ContextDetail() {
       <h1 className="page-title">📝 上下文注入分析</h1>
       <p className="page-subtitle">Prompt 构成、变更历史与缓存稳定性</p>
 
-      {loading && (
-        <div className="state-box">
-          <div className="state-box__spinner" />
-          <div>加载中...</div>
-        </div>
-      )}
-      {error && !loading && (
-        <div className="state-box state-box--error">
-          <div className="state-box__spinner" />
-          <div>加载失败：{error}</div>
-        </div>
-      )}
+      <StateBox loading={loading} error={error} />
 
       {data && !loading && (
         <>
