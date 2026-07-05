@@ -119,7 +119,9 @@ const fmt = (v: unknown): string => {
 const formatTs = (ts: number | string | undefined): string => {
   if (!ts) return '-';
   if (typeof ts === 'number') {
-    const d = new Date(ts);
+    // 后端 time.time() 返回秒级，new Date 需要毫秒；阈值 1e12 = 2001年
+    const ms = ts > 1e12 ? ts : ts * 1000;
+    const d = new Date(ms);
     return isNaN(d.getTime()) ? String(ts) : d.toLocaleString('zh-CN', { hour12: false });
   }
   return ts;
