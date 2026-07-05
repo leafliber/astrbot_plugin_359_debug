@@ -151,7 +151,14 @@ class WebApiMixin:
         from quart import jsonify, request
         level = request.args.get("level")
         plugin = request.args.get("plugin")
-        limit = int(request.args.get("limit", 500))
+        raw_limit = request.args.get("limit", "500")
+        if raw_limit == "all":
+            limit = -1  # -1 表示读取全部
+        else:
+            try:
+                limit = int(raw_limit)
+            except ValueError:
+                limit = 500
         return jsonify(await self.get_log_detail(level=level, plugin=plugin, limit=limit))
 
     async def _api_plugin(self) -> Any:

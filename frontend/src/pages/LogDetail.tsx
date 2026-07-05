@@ -55,11 +55,14 @@ const levelClass = (level: string): string => {
   return 'cell-good';
 };
 
+const LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const;
+type Level = (typeof LEVELS)[number];
+
 export default function LogDetail() {
-  const [pageSize, setPageSize] = useState(500);
+  const [pageSize, setPageSize] = useState<number | 'all'>('all');
   const { data, loading, error } = useApi<LogData>('/log', { limit: pageSize });
 
-  const [levelFilter, setLevelFilter] = useState('');
+  const [levelFilter, setLevelFilter] = useState<'WARN' | 'ERROR'>('WARN');
   const [pluginFilter, setPluginFilter] = useState('');
 
   const fileEnabled = data?.file_available ?? true;
@@ -70,12 +73,27 @@ export default function LogDetail() {
   const filteredEntries = useMemo(() => {
     return allEntries.filter((e) => {
       const lvl = (e.level || '').toUpperCase();
-      if (levelFilter && !lvl.includes(levelFilter.toUpperCase())) return false;
+      if (levelFilter && !lvl.includes(levelFilter)) return false;
       const plugin = e.plugin ?? e.module ?? '';
       if (pluginFilter && !String(plugin).toLowerCase().includes(pluginFilter.toLowerCase())) return false;
       return true;
     });
   }, [allEntries, levelFilter, pluginFilter]);
+
+  // 全部读取时，级别只能 WARN / ERROR
+  const isAllRead = pageSize === 'all';
+
+  const handlePageSizeChange = (val: string) => {
+    if (val === 'all') {
+      setPageSize('all');
+      // 切到全部读取时，若当前级别不在允许范围内则自动调整为 WARN
+      if (levelFilter !== 'WARN' && levelFilter !== 'ERROR') {
+        setLevelFilter('WARN');
+      }
+    } else {
+      setPageSize(Number(val));
+    }
+  };
 
   return (
     <div>
@@ -136,12 +154,26 @@ export default function LogDetail() {
           {/* 过滤控件 */}
           <div className="filter-bar">
             <label>级别：</label>
-            <input
+            <select
               className="text-input"
-              placeholder="例如 ERROR / WARN"
+              style={{ width: 'auto' }}
               value={levelFilter}
-              onChange={(e) => setLevelFilter(e.target.value)}
-            />
+              onChange={(e) => setLevelFilter(e.target.value as 'WARN' | 'ERROR')}
+            >
+              {isAllRead ? (
+                <>
+                  <option value="WARN">WARN</option>
+                  <option value="ERROR">ERROR</option>
+                </>
+              ) : (
+                <>
+                  <option value="">全部</option>
+                  {LEVELS.map((l) => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </>
+              )}
+            </select>
             <label>模块 / 插件：</label>
             <input
               className="text-input"
@@ -154,53 +186,30 @@ export default function LogDetail() {
               className="text-input"
               style={{ width: 'auto' }}
               value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
+              onChange={(e) => handlePageSizeChange(e.target.value)}
             >
               <option value={100}>100 条</option>
               <option value={500}>500 条</option>
               <option value={1000}>1000 条</option>
               <option value={2000}>2000 条</option>
               <option value={5000}>5000 条</option>
+              <option value="all">全部</option>
             </select>
+            {isAllRead && (
+              <span className="text-muted" style={{ fontSize: 12, color: 'var(--color-warn)' }}>
+                全部读取模式下仅支持 WARN / ERROR 筛选
+              </span>
+            )}
             <span className="text-muted" style={{ fontSize: 12 }}>
               共 {filteredEntries.length} 条
             </span>
           </div>
 
-          {/* 错误条目表 */}
-          <h2 className="section-title">日志条目</h2>
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>时间</th>
-                  <th>级别</th>
-                  <th>模块</th>
-                  <th>消息</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEntries.map((e, i) => (
-                  <tr key={i}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{formatTs(e.time ?? e.ts)}</td>
-                    <td className={levelClass(e.level ?? '')}>{e.level ?? '-'}</td>
-                    <td>{e.module ?? e.plugin ?? '-'}</td>
-                    <td style={{ whiteSpace: 'normal', maxWidth: 500 }}>{e.msg ?? e.message ?? '-'}</td>
-                  </tr>
-                ))}
-                {filteredEntries.length === 0 && (
-                  <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                      暂无匹配的日志条目
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
           {/* 错误聚类 */}
           <h2 className="section-title">错误聚类</h2>
+          <p className="form-row__desc" style={{ marginBottom: 8 }}>
+            汇总 WARN / ERROR 级别日志，以及消息内容含错误关键词的 INFO / DEBUG 日志，按指纹去重聚类。
+          </p>
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
@@ -228,6 +237,38 @@ export default function LogDetail() {
                   <tr>
                     <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       未发现错误聚类
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 日志条目表 */}
+          <h2 className="section-title">日志条目</h2>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>级别</th>
+                  <th>模块</th>
+                  <th>消息</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEntries.map((e, i) => (
+                  <tr key={i}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{formatTs(e.time ?? e.ts)}</td>
+                    <td className={levelClass(e.level ?? '')}>{e.level ?? '-'}</td>
+                    <td>{e.module ?? e.plugin ?? '-'}</td>
+                    <td style={{ whiteSpace: 'normal', maxWidth: 500 }}>{e.msg ?? e.message ?? '-'}</td>
+                  </tr>
+                ))}
+                {filteredEntries.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                      暂无匹配的日志条目
                     </td>
                   </tr>
                 )}

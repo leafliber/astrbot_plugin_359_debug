@@ -131,15 +131,17 @@ class LogMixin:
             limit: 返回的日志条目上限（最终结果条数）。
                    文件读取行数会按 limit 动态放大（×4），确保解析后条目足够。
         """
-        # 安全上限，避免一次性读取过多导致性能问题
-        limit = max(1, min(int(limit), 5000))
+        # limit = -1 表示读取全部；否则限制在 1-5000
+        read_all = int(limit) == -1
+        if not read_all:
+            limit = max(1, min(int(limit), 5000))
         # 1. 文件日志 —— 读取行数按 limit 动态放大，至少读取配置的 log_tail_lines
         log_path = self.get_log_file_path()
         file_entries = []
         file_exists = os.path.isfile(log_path)
         if file_exists:
             cfg_lines = int(self.cfg("log_tail_lines", 500))
-            n = max(cfg_lines, limit * 4)
+            n = cfg_lines * 20 if read_all else max(cfg_lines, limit * 4)
             lines = self._lg_tail_file(log_path, n)
             for line in lines:
                 parsed = self._lg_parse_line(line)
@@ -159,12 +161,30 @@ class LogMixin:
             all_entries = [e for e in all_entries if e.get("level", "").upper() == level.upper()]
         if plugin:
             all_entries = [e for e in all_entries if plugin.lower() in e.get("module", "").lower()]
-        all_entries = all_entries[-limit:]
+        if not read_all:
+            all_entries = all_entries[-limit:]
         # 按级别统计
         by_level = Counter(e.get("level", "UNKNOWN") for e in all_entries)
-        # 指纹聚类去重
+        # 指纹聚类去重 —— 仅聚类 WARN/ERROR 及内容含错误关键词的 INFO/DEBUG
+        _ERR_KEYWORDS = (
+            "error", "exception", "traceback", "failed", "failure",
+            "fatal", "critical", "warning", "warn ", "crash", "abort",
+            "timeout", "refused", "denied", "unreachable", "broken",
+        )
+
+        def _is_clusterworthy(e: dict) -> bool:
+            """判断该日志条是否值得进入错误聚类。"""
+            lvl = (e.get("level", "") or "").upper()
+            if lvl in ("ERROR", "CRITICAL", "FATAL", "WARN", "WARNING"):
+                return True
+            # INFO / DEBUG：消息内容含错误关键词才纳入
+            msg = (e.get("msg", "") + " " + e.get("tb", "")).lower()
+            return any(kw in msg for kw in _ERR_KEYWORDS)
+
         clusters: dict[str, dict] = {}
         for e in all_entries:
+            if not _is_clusterworthy(e):
+                continue
             fp = fingerprint(e.get("msg", "") + e.get("tb", ""))
             if fp not in clusters:
                 clusters[fp] = {"fingerprint": fp, "count": 0, "sample": e, "level": e.get("level")}

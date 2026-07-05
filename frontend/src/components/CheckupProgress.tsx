@@ -39,7 +39,7 @@ export default function CheckupProgress({ phase, doneCount }: Props) {
       <div className="checkup-progress__title">
         {isAnalyzing ? (
           <>
-            <span className="checkup-progress__brain">🧠</span>
+            <span className="checkup-progress__brain">🔍</span>
             <span>AI 综合诊断中</span>
             <span className="checkup-progress__dots">
               <span className="dot" />

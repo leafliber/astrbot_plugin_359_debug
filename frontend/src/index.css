@@ -217,6 +217,14 @@ button {
   gap: 4px;
   flex: 0 1 auto;
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+/* 隐藏导航栏的滚动条（保留滚动能力） */
+.app-header__nav::-webkit-scrollbar {
+  display: none;
 }
 
 .nav-link {
@@ -1837,12 +1845,13 @@ table.data-table tbody tr {
 .checkup-progress__scan,
 .checkup-progress__brain {
   font-size: 22px;
-  animation: scanPulse 1.4s ease-in-out infinite;
+  display: inline-block;
+  animation: scanSearch 1.6s ease-in-out infinite;
 }
 
-@keyframes scanPulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.18); opacity: 0.8; }
+@keyframes scanSearch {
+  0%, 100% { transform: translateX(-3px) rotate(-8deg); }
+  50% { transform: translateX(3px) rotate(8deg); }
 }
 
 /* 省略号动画 */

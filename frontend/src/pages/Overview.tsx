@@ -276,7 +276,7 @@ export default function Overview() {
       )}
 
       {/* ===================== 六维雷达 ===================== */}
-      <h2 className="section-title anim-fade-up">六维健康雷达</h2>
+      <h2 className="section-title anim-fade-up">健康雷达</h2>
       <div className="card anim-fade-up delay-1">
         <RadarChart data={radar} />
       </div>

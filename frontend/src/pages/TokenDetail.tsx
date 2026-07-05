@@ -5,7 +5,6 @@ import {
   Cell,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
 import { useApi } from '../api/bridge';
 import { chartColors } from '../theme-utils';
@@ -134,11 +133,6 @@ export default function TokenDetail() {
                         cx="50%"
                         cy="50%"
                         outerRadius={90}
-                        label={({ name, percent }) =>
-                          `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
-                        }
-                        labelLine={false}
-                        style={{ fontSize: 11 }}
                       >
                         {pieData.map((_, i) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
@@ -153,7 +147,6 @@ export default function TokenDetail() {
                           fontSize: 12,
                         }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 11, color: tc.tickSecondary }} />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
