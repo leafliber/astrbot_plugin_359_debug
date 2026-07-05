@@ -114,6 +114,15 @@ class AiCheckMixin:
         except Exception as e:
             modules["plugin"] = {"score": -1, "error": str(e)}
 
+        # 7. 会话锁
+        try:
+            modules["lock"] = {
+                "score": self.get_lock_health(),
+                "detail": await self.get_lock_detail(),
+            }
+        except Exception as e:
+            modules["lock"] = {"score": -1, "error": str(e)}
+
         return modules
 
     def _build_checkup_prompt(self, modules: dict[str, Any]) -> tuple[str, str]:
@@ -123,7 +132,7 @@ class AiCheckMixin:
         """
         system_prompt = (
             "你是 AstrBot 的专业体检医生，负责对机器人运行状态进行全面健康诊断。\n"
-            "你将收到6个维度的体检数据，请逐一分析并给出专业结论。\n\n"
+            "你将收到7个维度的体检数据，请逐一分析并给出专业结论。\n\n"
             "输出要求（严格 JSON 格式，不要包裹在 markdown 代码块中）：\n"
             "{\n"
             '  "overall": "整体评价（1-2句话概括健康状态）",\n'
@@ -148,8 +157,9 @@ class AiCheckMixin:
             "tool": "工具调用",
             "log": "日志错误",
             "plugin": "插件安全",
+            "lock": "会话锁",
         }
-        for key in ("runtime", "token", "context", "tool", "log", "plugin"):
+        for key in ("runtime", "token", "context", "tool", "log", "plugin", "lock"):
             info = modules.get(key, {})
             score = info.get("score", -1)
             name = module_names.get(key, key)
@@ -225,6 +235,20 @@ class AiCheckMixin:
                     f"冲突数：{len(conflicts)}，"
                     f"生命周期事件：{len(lifecycle)}条\n"
                     f"冲突：{json.dumps(conflicts[:3], ensure_ascii=False)[:400]}"
+                )
+            elif key == "lock":
+                summary = detail.get("summary", {})
+                sessions = detail.get("sessions", [])
+                danger_sessions = [s for s in sessions if s.get("level") == "danger"]
+                warn_sessions = [s for s in sessions if s.get("level") == "warn"]
+                return (
+                    f"活跃会话：{summary.get('total_sessions', 0)}，"
+                    f"高危：{summary.get('danger', 0)}，"
+                    f"警告：{summary.get('warning', 0)}，"
+                    f"等待者：{summary.get('total_waiters', 0)}，"
+                    f"最长持锁：{summary.get('max_hold_secs', 0)}s\n"
+                    f"高危会话：{json.dumps(danger_sessions[:3], ensure_ascii=False)[:400]}\n"
+                    f"警告会话：{json.dumps(warn_sessions[:3], ensure_ascii=False)[:300]}"
                 )
         except Exception:
             pass

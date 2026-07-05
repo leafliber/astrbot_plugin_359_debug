@@ -85,7 +85,7 @@ export default function HealthScore({ score, level }: HealthScoreProps) {
           <div className="health-score__value" style={{ color }}>
             {displayScore}
           </div>
-          <div className="health-score__label">健康分</div>
+          <div className="health-score__label">日常分</div>
         </div>
       </div>
       <span className={'health-score__level ' + levelClass(clamped)}>

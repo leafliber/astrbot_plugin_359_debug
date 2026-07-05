@@ -32,10 +32,11 @@ const MODULE_ICONS: Record<string, string> = {
   tool: '🔧',
   log: '📋',
   plugin: '🧩',
+  lock: '🔒',
 };
 
-const COLLECT_INTERVAL = 360; // 每个模块采集间隔(ms)
-const MODULE_TOTAL = 6;
+const COLLECT_INTERVAL = 320; // 每个模块采集间隔(ms)
+const MODULE_TOTAL = 7;
 const MIN_ANALYZE_TIME = 650; // 分析阶段最短展示(ms)
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -199,6 +200,7 @@ export default function Overview() {
     { key: 'tool', title: '工具调用', score: 0, summary: '暂无数据', status: 'ok', detailRoute: '/tool' },
     { key: 'log', title: '错误日志', score: 0, summary: '暂无数据', status: 'ok', detailRoute: '/log' },
     { key: 'plugin', title: '插件安全', score: 0, summary: '暂无数据', status: 'ok', detailRoute: '/plugin' },
+    { key: 'lock', title: '会话锁', score: 0, summary: '暂无数据', status: 'ok', detailRoute: '/lock' },
   ];
 
   const renderModules: ModuleInfo[] =

@@ -7,6 +7,7 @@ import ContextDetail from './pages/ContextDetail';
 import ToolDetail from './pages/ToolDetail';
 import LogDetail from './pages/LogDetail';
 import PluginDetail from './pages/PluginDetail';
+import LockDetail from './pages/LockDetail';
 import Settings from './pages/Settings';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ready } from './api/bridge';
@@ -21,6 +22,7 @@ const NAV_ITEMS: { to: string; label: string }[] = [
   { to: '/tool', label: '工具' },
   { to: '/log', label: '日志' },
   { to: '/plugin', label: '插件' },
+  { to: '/lock', label: '会话锁' },
   { to: '/settings', label: '设置' },
 ];
 
@@ -91,6 +93,7 @@ export default function App() {
           <Route path="/tool" element={<ToolDetail />} />
           <Route path="/log" element={<LogDetail />} />
           <Route path="/plugin" element={<PluginDetail />} />
+          <Route path="/lock" element={<LockDetail />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Overview />} />
         </Routes>

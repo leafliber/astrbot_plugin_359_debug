@@ -29,6 +29,7 @@ from .debug_359.context_mixin import ContextMixin
 from .debug_359.tool_mixin import ToolMixin
 from .debug_359.log_mixin import LogMixin
 from .debug_359.plugin_mixin import PluginMixin
+from .debug_359.session_lock_mixin import SessionLockMixin
 from .debug_359.commands_mixin import CommandsMixin
 from .debug_359.ai_check_mixin import AiCheckMixin
 from .debug_359.webapi_mixin import WebApiMixin
@@ -44,6 +45,7 @@ class Main(
     ToolMixin,
     LogMixin,
     PluginMixin,
+    SessionLockMixin,
     # 入口层（依赖上述所有 Mixin 的查询方法）
     CommandsMixin,
     AiCheckMixin,

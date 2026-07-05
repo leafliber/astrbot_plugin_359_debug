@@ -215,7 +215,7 @@ button {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 1;
+  flex: 0 1 auto;
   overflow-x: auto;
 }
 
@@ -246,6 +246,7 @@ button {
   align-items: center;
   gap: 14px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .theme-toggle {

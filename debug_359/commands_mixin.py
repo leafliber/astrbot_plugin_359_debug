@@ -2,7 +2,7 @@
 359度 Debug · L3 指令入口 Mixin
 
 简化指令：仅输出一行摘要，引导用户去 Pages 看详情。
-指令组: /debug [runtime|token|ctx|tool|log|plugin|help]  别名: /359, /诊断
+指令组: /debug [runtime|token|ctx|tool|log|plugin|lock|help]  别名: /359, /诊断
 """
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ class CommandsMixin:
             "  /debug tool     工具调用分析\n"
             "  /debug log      错误日志分析\n"
             "  /debug plugin   插件分析（安全/冲突）\n"
+            "  /debug lock     会话锁分析（死锁检测）\n"
             "  /debug all      全部摘要一览\n"
             "—— 完整 360°体检报告请见 WebUI → 插件详情 → Pages"
         )
@@ -80,6 +81,14 @@ class CommandsMixin:
             return
         yield event.plain_result(await self.fmt_plugin_oneline())
 
+    @debug_group.command("lock", alias={"锁", "会话锁", "死锁"})
+    async def cmd_lock(self, event: AstrMessageEvent):
+        """会话锁分析"""
+        if self._check_admin(event):
+            yield event.plain_result("无权限：仅管理员可执行诊断指令。")
+            return
+        yield event.plain_result(self.fmt_lock_oneline())
+
     @debug_group.command("all", alias={"全部", "体检"})
     async def cmd_all(self, event: AstrMessageEvent):
         """全部摘要一览"""
@@ -93,6 +102,7 @@ class CommandsMixin:
         lines.append(self.fmt_tool_oneline())
         lines.append(self.fmt_log_oneline())
         lines.append(await self.fmt_plugin_oneline())
+        lines.append(self.fmt_lock_oneline())
         lines.append("─" * 30)
         lines.append("完整 360°体检报告请见 WebUI → 插件详情 → Pages")
         yield event.plain_result("\n".join(lines))

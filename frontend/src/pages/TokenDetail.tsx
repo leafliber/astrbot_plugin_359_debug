@@ -47,6 +47,18 @@ const fmt = (v: unknown): string => {
   return n.toLocaleString('zh-CN');
 };
 
+/** 紧凑数字格式化（K/M/G），避免大数字撑破容器 */
+const fmtCompact = (v: unknown): string => {
+  if (v === null || v === undefined || v === '') return '-';
+  const n = Number(v);
+  if (isNaN(n)) return String(v);
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
+  if (abs >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+  if (abs >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
+};
+
 const pct = (v: unknown): string => {
   if (v === null || v === undefined || v === '') return '-';
   const n = Number(v);
@@ -91,15 +103,15 @@ export default function TokenDetail() {
           <div className="stat-grid" style={{ marginBottom: 20 }}>
             <div className="stat-block">
               <div className="stat-block__label">总调用次数</div>
-              <div className="stat-block__value">{fmt(totalInfo?.calls)}</div>
+              <div className="stat-block__value" title={fmt(totalInfo?.calls)}>{fmtCompact(totalInfo?.calls)}</div>
             </div>
             <div className="stat-block">
               <div className="stat-block__label">总 Token 数</div>
-              <div className="stat-block__value">{fmt(totalInfo?.total)}</div>
+              <div className="stat-block__value" title={fmt(totalInfo?.total)}>{fmtCompact(totalInfo?.total)}</div>
             </div>
             <div className="stat-block">
               <div className="stat-block__label">缓存命中</div>
-              <div className="stat-block__value text-primary">{fmt(totalInfo?.input_cached)}</div>
+              <div className="stat-block__value text-primary" title={fmt(totalInfo?.input_cached)}>{fmtCompact(totalInfo?.input_cached)}</div>
             </div>
             <div className="stat-block">
               <div className="stat-block__label">缓存命中率</div>
@@ -166,15 +178,15 @@ export default function TokenDetail() {
               <div className="stat-grid" style={{ marginTop: 16 }}>
                 <div className="stat-block">
                   <div className="stat-block__label">输入（未缓存）</div>
-                  <div className="stat-block__value">{fmt(totalInfo?.input_other)}</div>
+                  <div className="stat-block__value" title={fmt(totalInfo?.input_other)}>{fmtCompact(totalInfo?.input_other)}</div>
                 </div>
                 <div className="stat-block">
                   <div className="stat-block__label">输入（已缓存）</div>
-                  <div className="stat-block__value cell-good">{fmt(totalInfo?.input_cached)}</div>
+                  <div className="stat-block__value cell-good" title={fmt(totalInfo?.input_cached)}>{fmtCompact(totalInfo?.input_cached)}</div>
                 </div>
                 <div className="stat-block">
                   <div className="stat-block__label">输出</div>
-                  <div className="stat-block__value">{fmt(totalInfo?.output)}</div>
+                  <div className="stat-block__value" title={fmt(totalInfo?.output)}>{fmtCompact(totalInfo?.output)}</div>
                 </div>
               </div>
             </div>
@@ -201,11 +213,11 @@ export default function TokenDetail() {
                   return (
                     <tr key={i}>
                       <td>{m.key ?? m.model ?? '-'}</td>
-                      <td className="numeric">{fmt(m.calls)}</td>
-                      <td className="numeric">{fmt(m.input_other)}</td>
-                      <td className="numeric cell-good">{fmt(m.input_cached)}</td>
-                      <td className="numeric">{fmt(m.output)}</td>
-                      <td className="numeric">{fmt(m.total)}</td>
+                      <td className="numeric" title={fmt(m.calls)}>{fmtCompact(m.calls)}</td>
+                      <td className="numeric" title={fmt(m.input_other)}>{fmtCompact(m.input_other)}</td>
+                      <td className="numeric cell-good" title={fmt(m.input_cached)}>{fmtCompact(m.input_cached)}</td>
+                      <td className="numeric" title={fmt(m.output)}>{fmtCompact(m.output)}</td>
+                      <td className="numeric" title={fmt(m.total)}>{fmtCompact(m.total)}</td>
                       <td className={'numeric ' + (fr > 5 ? 'cell-error' : fr > 0 ? 'cell-warn' : 'cell-good')}>
                         {pct(fr)}
                       </td>

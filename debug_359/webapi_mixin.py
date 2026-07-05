@@ -32,6 +32,7 @@ class WebApiMixin:
             ("/tool", self._api_tool, ["GET"], "工具调用详情"),
             ("/log", self._api_log, ["GET"], "日志详情"),
             ("/plugin", self._api_plugin, ["GET"], "插件分析详情"),
+            ("/lock", self._api_lock, ["GET"], "会话锁详情"),
             ("/settings", self._api_get_settings, ["GET"], "读取配置"),
             ("/settings", self._api_save_settings, ["POST"], "保存配置"),
             ("/theme", self._api_get_theme, ["GET"], "读取主题"),
@@ -65,6 +66,7 @@ class WebApiMixin:
             "tool": self.get_tool_health(),
             "log": self.get_log_health(),
             "plugin": self.get_plugin_health(),
+            "lock": self.get_lock_health(),
         }
         score = round(sum(radar.values()) / len(radar)) if radar else 0
         level = "优秀" if score >= 90 else "良好" if score >= 75 else "一般" if score >= 60 else "需关注"
@@ -104,6 +106,10 @@ class WebApiMixin:
              "summary": "见详情",
              "status": _status(radar["plugin"]), "detailRoute": "/plugin",
              "icon": "🧩"},
+            {"key": "lock", "title": "会话锁", "score": radar["lock"],
+             "summary": _summary(self.fmt_lock_oneline()),
+             "status": _status(radar["lock"]), "detailRoute": "/lock",
+             "icon": "🔒"},
         ]
         return jsonify({
             "score": score,
@@ -151,6 +157,10 @@ class WebApiMixin:
     async def _api_plugin(self) -> Any:
         from quart import jsonify
         return jsonify(await self.get_plugin_detail())
+
+    async def _api_lock(self) -> Any:
+        from quart import jsonify
+        return jsonify(await self.get_lock_detail())
 
     async def _api_get_settings(self) -> Any:
         from quart import jsonify

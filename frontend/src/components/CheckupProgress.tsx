@@ -18,6 +18,7 @@ const PROGRESS_MODULES: ProgressModule[] = [
   { key: 'tool', name: '工具', icon: '🔧' },
   { key: 'log', name: '日志', icon: '📋' },
   { key: 'plugin', name: '插件', icon: '🧩' },
+  { key: 'lock', name: '会话锁', icon: '🔒' },
 ];
 
 export type CheckupPhase = 'collecting' | 'analyzing';
@@ -93,14 +94,14 @@ export default function CheckupProgress({ phase, doneCount }: Props) {
         <div
           className="checkup-progress__bar-fill"
           style={{
-            width: isAnalyzing ? '100%' : `${(doneCount / 6) * 100}%`,
+            width: isAnalyzing ? '100%' : `${(doneCount / PROGRESS_MODULES.length) * 100}%`,
           }}
         />
       </div>
       <div className="checkup-progress__hint">
         {isAnalyzing
-          ? '正在调用 LLM 对 6 个模块的数据进行综合分析…'
-          : `已采集 ${doneCount} / 6 个模块`}
+          ? `正在调用 LLM 对 ${PROGRESS_MODULES.length} 个模块的数据进行综合分析…`
+          : `已采集 ${doneCount} / ${PROGRESS_MODULES.length} 个模块`}
       </div>
     </div>
   );

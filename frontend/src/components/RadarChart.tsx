@@ -16,6 +16,7 @@ export interface RadarData {
   tool: number;
   log: number;
   plugin: number;
+  lock: number;
 }
 
 export interface RadarChartProps {
@@ -29,6 +30,7 @@ const DIMENSIONS: { key: keyof RadarData; label: string }[] = [
   { key: 'tool', label: '工具' },
   { key: 'log', label: '日志' },
   { key: 'plugin', label: '插件' },
+  { key: 'lock', label: '会话锁' },
 ];
 
 export default function RadarChart({ data }: RadarChartProps) {
@@ -59,7 +61,7 @@ export default function RadarChart({ data }: RadarChartProps) {
             axisLine={false}
           />
           <Radar
-            name="健康分"
+            name="日常分"
             dataKey="score"
             stroke={c.primary}
             strokeWidth={2}
