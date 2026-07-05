@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApi, apiPost } from '../api/bridge';
+import { StateBox } from '../components/StateBox';
 import SelfDiag from '../components/SelfDiag';
 
 /**
@@ -208,7 +209,7 @@ function ConfirmDialog({
 // ==================== 主组件 ====================
 
 export default function Settings() {
-  const { data, loading } = useApi<{ config: PluginConfig }>('/settings');
+  const { data, loading, error } = useApi<{ config: PluginConfig }>('/settings');
   const [config, setConfig] = useState<PluginConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -315,6 +316,16 @@ export default function Settings() {
       setBufBusy(null);
     }
   };
+
+  // 配置未加载时显示加载态（避免 config 为 null 时访问属性崩溃）
+  if (!config) {
+    return (
+      <div>
+        <h1 className="page-title">⚙️ 设置</h1>
+        <StateBox loading={loading} error={error} />
+      </div>
+    );
+  }
 
   return (
     <div>
