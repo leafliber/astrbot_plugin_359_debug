@@ -21,36 +21,33 @@ class ContextMixin:
 
     @filter.on_llm_request(priority=100000)
     async def _ctx_on_req_head(self, event: AstrMessageEvent, req) -> None:
-        """head：其他插件修改前，记录 system_prompt 原态。"""
-        # 运行时观测：记录本钩子被调用 + 当前是否已被 stop（说明前面有插件掐断了）
-        try:
-            self._record_hook_runtime(
-                "OnLLMRequestEvent",
-                stopped=event.is_stopped(),
-                order=[],  # head 第一个执行，顺序未知
-            )
-        except Exception:
-            pass
+        """head：其他插件修改前，记录 system_prompt 原态。
+
+        重要：head 钩子也调用 record_context()，确保即使 tail 钩子
+        因 event.stop_event() 被跳过，上下文数据仍然有记录。
+        """
+        self._hb("_ctx_on_req_head")
         if not self.is_enabled("context_dump"):
             return
         try:
             sp = getattr(req, "system_prompt", "") or ""
-            self._ctx_head_snapshots[id(event)] = sp
-            logger.debug(f"[359debug] ctx head hook: sp_len={len(sp)}, umo={event.unified_msg_origin}")
+            eid = id(event)
+            self._ctx_head_snapshots[eid] = sp
+
+            # head 阶段也立即记录快照（防止 tail 被 stop 跳过导致无数据）
+            umo = event.unified_msg_origin
+            snapshot = self._ctx_build_snapshot(umo, req, sp, head_sp=sp, tail_fired=False)
+            self.record_context(umo, snapshot)
+            logger.debug(
+                f"[359debug] ctx head hook: sp_len={len(sp)}, umo={umo}"
+            )
         except Exception as e:
             logger.warning(f"[359debug] 上下文 head hook 异常: {e}", exc_info=True)
 
     @filter.on_llm_request(priority=-100000)
     async def _ctx_on_req_tail(self, event: AstrMessageEvent, req) -> None:
-        """tail：其他插件修改后，dump 最终状态。"""
-        # 运行时观测：tail 能跑到这里 → 整条钩子链未被 stop 掐断
-        try:
-            rt = self._hook_runtime_log.get("OnLLMRequestEvent")
-            if rt:
-                # tail 执行说明未被掐断（次数+1在 head 已计，这里只标记非 stopped）
-                pass
-        except Exception:
-            pass
+        """tail：其他插件修改后，用最终状态更新快照。"""
+        self._hb("_ctx_on_req_tail")
         if not self.is_enabled("context_dump"):
             return
         try:
@@ -58,65 +55,71 @@ class ContextMixin:
             eid = id(event)
             sp = getattr(req, "system_prompt", "") or ""
             head_sp = self._ctx_head_snapshots.pop(eid, "")
-            # 工具列表
-            tools = []
-            ft = getattr(req, "func_tool", None)
-            if ft:
-                try:
-                    tools = list(ft.names())
-                except Exception:
-                    try:
-                        tools = [t.name for t in ft.func_list]
-                    except Exception:
-                        pass
-            # 动态注入
-            extra_parts = getattr(req, "extra_user_content_parts", []) or []
-            extra_texts = []
-            for p in extra_parts:
-                try:
-                    extra_texts.append(getattr(p, "text", str(p)))
-                except Exception:
-                    pass
-            # 临时内容标记审计（F8）
-            temp_count = sum(1 for p in extra_parts if getattr(p, "_temp", False))
-
-            # 估算 contexts 的 token 数（基于 JSON 序列化长度）
-            contexts_raw = getattr(req, "contexts", []) or []
-            contexts_json = ""
-            try:
-                import json as _json
-                contexts_json = _json.dumps(contexts_raw, ensure_ascii=False)
-            except Exception:
-                contexts_json = str(contexts_raw)
-
-            snapshot = {
-                "ts": time.time(),
-                "umo": umo,
-                "model": getattr(req, "model", "") or "",
-                "system_prompt": sp,
-                "system_prompt_len": len(sp),
-                "system_prompt_tokens": estimate_tokens(sp),
-                "system_prompt_changed": sp != head_sp,
-                "head_sp": head_sp,
-                "contexts_count": len(contexts_raw),
-                "contexts_tokens": estimate_tokens(contexts_json),
-                "tools": tools,
-                "extra_parts_count": len(extra_parts),
-                "extra_texts": extra_texts,
-                "temp_parts_count": temp_count,
-            }
+            # tail 钩子能跑到 → 说明整条钩子链未被 stop 掐断
+            snapshot = self._ctx_build_snapshot(umo, req, sp, head_sp=head_sp, tail_fired=True)
             self.record_context(umo, snapshot)
             logger.info(
                 f"[359debug] ctx tail hook: umo={umo}, sp_len={len(sp)}, "
-                f"sp_tokens={snapshot['system_prompt_tokens']}, "
+                f"sp_changed={snapshot['system_prompt_changed']}, "
                 f"ctx_count={snapshot['contexts_count']}, "
-                f"tools={len(tools)}, extra={len(extra_parts)}"
+                f"tools={len(snapshot['tools'])}, extra={snapshot['extra_parts_count']}"
             )
-
             # F1 缓存破坏检测
             await self._ctx_check_cache_disruption(umo, sp)
         except Exception as e:
             logger.warning(f"[359debug] 上下文采集异常: {e}", exc_info=True)
+
+    def _ctx_build_snapshot(
+        self, umo: str, req, sp: str, head_sp: str = "", tail_fired: bool = False
+    ) -> dict:
+        """构建上下文快照（head/tail 共用）。"""
+        # 工具列表
+        tools = []
+        ft = getattr(req, "func_tool", None)
+        if ft:
+            try:
+                tools = list(ft.names())
+            except Exception:
+                try:
+                    tools = [t.name for t in ft.func_list]
+                except Exception:
+                    pass
+        # 动态注入
+        extra_parts = getattr(req, "extra_user_content_parts", []) or []
+        extra_texts = []
+        for p in extra_parts:
+            try:
+                extra_texts.append(getattr(p, "text", str(p)))
+            except Exception:
+                pass
+        # 临时内容标记审计（F8）
+        temp_count = sum(1 for p in extra_parts if getattr(p, "_temp", False))
+        # 估算 contexts 的 token 数
+        contexts_raw = getattr(req, "contexts", []) or []
+        contexts_json = ""
+        try:
+            import json as _json
+            contexts_json = _json.dumps(contexts_raw, ensure_ascii=False)
+        except Exception:
+            contexts_json = str(contexts_raw)
+
+        return {
+            "ts": time.time(),
+            "umo": umo,
+            "model": getattr(req, "model", "") or "",
+            "system_prompt": sp,
+            "system_prompt_len": len(sp),
+            "system_prompt_tokens": estimate_tokens(sp),
+            "system_prompt_changed": sp != head_sp if head_sp else False,
+            "head_sp": head_sp,
+            "contexts_count": len(contexts_raw),
+            "contexts_tokens": estimate_tokens(contexts_json),
+            "tools": tools,
+            "extra_parts_count": len(extra_parts),
+            "extra_texts": extra_texts,
+            "temp_parts_count": temp_count,
+            "tail_fired": tail_fired,
+        }
 
     async def _ctx_check_cache_disruption(self, umo: str, sp: str) -> None:
         """检测 system_prompt 是否连续多轮不稳定变化（F1 缓存破坏）。"""
@@ -161,6 +164,7 @@ class ContextMixin:
             "extra_parts_count": snap.get("extra_parts_count", 0),
             "extra_texts": snap.get("extra_texts", []),
             "temp_parts_count": snap.get("temp_parts_count", 0),
+            "tail_fired": snap.get("tail_fired", False),
             "output_chain": snap.get("output_chain", {"available": False}),
         }
 
@@ -217,6 +221,7 @@ class ContextMixin:
     @filter.on_decorating_result()
     async def _ctx_on_decorating(self, event: AstrMessageEvent) -> None:
         """F3: 追踪 LLM 原始输出 → 最终发送之间的消息链变换。"""
+        self._hb("_ctx_on_decorating")
         if not self.is_enabled("context_dump"):
             return
         try:

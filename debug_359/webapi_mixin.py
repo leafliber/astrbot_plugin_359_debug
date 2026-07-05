@@ -42,6 +42,7 @@ class WebApiMixin:
             ("/ai_provider", self._api_ai_provider, ["GET"], "查询默认AI Provider"),
             ("/ai_checkup", self._api_ai_checkup, ["POST"], "AI智能体检"),
             ("/live", self._api_live, ["GET"], "实时告警SSE"),
+            ("/diag", self._api_diag, ["GET"], "钩子链路诊断"),
         ]
         for route, handler, methods, desc in endpoints:
             try:
@@ -259,3 +260,14 @@ class WebApiMixin:
             async for event in self.subscribe_alerts():
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         return Response(stream(), mimetype="text/event-stream")
+
+    async def _api_diag(self) -> Any:
+        """钩子链路诊断报告。"""
+        from quart import jsonify
+        try:
+            report = self.diagnose_hooks()
+            return jsonify(report)
+        except Exception as e:
+            from astrbot.api import logger
+            logger.error(f"[359debug] diag 异常: {e}", exc_info=True)
+            return jsonify({"error": f"{type(e).__name__}: {e}"})

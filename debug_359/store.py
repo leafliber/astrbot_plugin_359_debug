@@ -70,7 +70,122 @@ class StoreMixin:
         self._hook_runtime_log: dict = {}
         # 本插件名缓存（延迟解析，_get_self_plugin_name 填充）
         self._self_plugin_name_cache: str | None = None
+        # 钩子心跳：{method_name: {calls: N, last_ts: float, last_err: str|None}}
+        self._hook_heartbeat: dict[str, dict] = {}
         logger.debug("[359debug] StoreMixin 已初始化")
+
+    def _hb(self, method_name: str, err: str | None = None) -> None:
+        """记录钩子心跳。在钩子方法入口调用。"""
+        entry = self._hook_heartbeat.setdefault(method_name, {"calls": 0, "last_ts": 0.0, "last_err": None})
+        entry["calls"] += 1
+        entry["last_ts"] = time.time()
+        if err:
+            entry["last_err"] = err
+
+    def diagnose_hooks(self) -> dict:
+        """
+        全面诊断钩子链路：注册表 → 绑定 → 配置 → 心跳 → 缓冲。
+
+        返回结构化的诊断报告，用于排查「某模块一直不更新」问题。
+        """
+        import traceback
+        report: dict = {
+            "timestamp": time.time(),
+            "self_plugin_name": None,
+            "module_path_patch": {"main_module": None, "patched_count": 0},
+            "registry": {"total": 0, "ours": 0, "by_event": {}},
+            "binding": {"bound": 0, "unbound": 0, "details": []},
+            "config": {},
+            "heartbeat": {},
+            "buffers": {},
+        }
+
+        # 1. 本插件名
+        try:
+            report["self_plugin_name"] = getattr(self, "_get_self_plugin_name", lambda: None)()
+        except Exception:
+            pass
+
+        # 2. 模块路径补丁状态
+        try:
+            report["module_path_patch"]["main_module"] = type(self).__module__
+        except Exception:
+            pass
+
+        # 3. 遍历 star_handlers_registry，检查我们的 handler
+        try:
+            from astrbot.core.star.star_handler import star_handlers_registry
+            from astrbot.core.star.star import star_map
+
+            main_mod = type(self).__module__
+            pkg_prefix = main_mod.rsplit(".", 1)[0] + "." if "." in main_mod else main_mod + "."
+
+            all_handlers = list(star_handlers_registry)
+            report["registry"]["total"] = len(all_handlers)
+
+            for h in all_handlers:
+                # 判断是否属于本插件（通过 patched 后的 module_path 或原始前缀）
+                is_ours = (
+                    h.handler_module_path == main_mod
+                    or h.handler_module_path.startswith(pkg_prefix)
+                )
+                if not is_ours:
+                    continue
+
+                report["registry"]["ours"] += 1
+
+                # 按事件类型统计
+                evt_name = h.event_type.name if hasattr(h, "event_type") and h.event_type else "?"
+                report["registry"]["by_event"].setdefault(evt_name, 0)
+                report["registry"]["by_event"][evt_name] += 1
+
+                # 检查绑定状态（是否已绑定 self）
+                import functools
+                is_bound = isinstance(h.handler, functools.partial)
+                if is_bound:
+                    report["binding"]["bound"] += 1
+                else:
+                    report["binding"]["unbound"] += 1
+
+                # 检查 star_map 中能否找到
+                in_star_map = h.handler_module_path in star_map
+                star_map_activated = False
+                if in_star_map:
+                    star_map_activated = getattr(star_map[h.handler_module_path], "activated", False)
+
+                report["binding"]["details"].append({
+                    "name": getattr(h, "handler_name", "?"),
+                    "event": evt_name,
+                    "module_path": h.handler_module_path,
+                    "bound": is_bound,
+                    "enabled": getattr(h, "enabled", True),
+                    "in_star_map": in_star_map,
+                    "star_map_activated": star_map_activated,
+                    "priority": getattr(h, "priority", 0),
+                })
+
+            report["module_path_patch"]["patched_count"] = report["registry"]["ours"]
+        except Exception as e:
+            report["registry"]["error"] = f"{type(e).__name__}: {e}"
+
+        # 4. 配置检查
+        for key in sorted(self._cfg.keys()):
+            report["config"][key] = self._cfg[key]
+
+        # 5. 心跳（哪些钩子真正被调用过）
+        report["heartbeat"] = dict(sorted(self._hook_heartbeat.items()))
+
+        # 6. 缓冲区大小
+        report["buffers"] = {
+            "runtime_buf": len(self._runtime_buf),
+            "tool_buf": len(self._tool_buf),
+            "context_last_keys": len(self._context_last),
+            "context_history": len(self._context_history),
+            "alert_history": len(self._alert_history),
+            "token_cache": len(self._token_cache) if hasattr(self, "_token_cache") else "N/A",
+        }
+
+        return report
 
     # ==================== 配置 ====================
 

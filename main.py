@@ -94,15 +94,25 @@ try:
     _main_mod = Main.__module__
     _pkg_prefix = _main_mod.rsplit(".", 1)[0] + "."
     _patched = 0
+    _all_ours = []
     for _h in list(_shr):
-        if (
-            _h.handler_module_path.startswith(_pkg_prefix)
-            and _h.handler_module_path != _main_mod
-        ):
-            _h.handler_module_path = _main_mod
-            _patched += 1
+        if _h.handler_module_path.startswith(_pkg_prefix):
+            _all_ours.append((_h.handler_name, _h.handler_module_path, _h.event_type.name if _h.event_type else "?"))
+            if _h.handler_module_path != _main_mod:
+                _h.handler_module_path = _main_mod
+                _patched += 1
     if _patched:
-        logger.debug(f"[359debug] 已修复 {_patched} 个 Mixin 钩子的模块路径")
+        logger.info(
+            f"[359debug] ✓ 已修复 {_patched} 个 Mixin 钩子的模块路径 "
+            f"(主模块={_main_mod}, 包前缀={_pkg_prefix})"
+        )
+    elif _all_ours:
+        logger.info(f"[359debug] 钩子模块路径无需修复（{len(_all_ours)}个钩子已在主模块下）")
+    else:
+        logger.warning(
+            f"[359debug] ⚠ 未找到任何属于本包的钩子！主模块={_main_mod}, 前缀={_pkg_prefix}。"
+            f"这意味着 Mixin 的 @filter 装饰器可能未执行。"
+        )
 except Exception as _e:
-    logger.warning(f"[359debug] Mixin 钩子模块路径修复失败: {_e}")
+    logger.warning(f"[359debug] Mixin 钩子模块路径修复失败: {_e}", exc_info=True)
 # === end fix =================================================================

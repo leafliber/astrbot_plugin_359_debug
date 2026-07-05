@@ -35,6 +35,7 @@ class PluginMixin:
     @filter.on_plugin_loaded()
     async def _pl_on_loaded(self, metadata) -> None:
         """插件加载审计。"""
+        self._hb("_pl_on_loaded")
         if not self.is_enabled("plugin_analysis"):
             return
         try:
@@ -49,6 +50,7 @@ class PluginMixin:
     @filter.on_plugin_unloaded()
     async def _pl_on_unloaded(self, metadata) -> None:
         """插件卸载审计。"""
+        self._hb("_pl_on_unloaded")
         if not self.is_enabled("plugin_analysis"):
             return
         try:
