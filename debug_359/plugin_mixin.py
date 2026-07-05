@@ -398,9 +398,12 @@ class PluginMixin:
                 desc = base + "，共享可变对象，存在潜在覆盖风险"
             else:
                 desc = base + "，执行顺序由优先级/加载顺序决定"
-            # 仅静态 → low；若该钩子有运行时 stop 实证 → high
-            sev = "high" if (has_rt and rt_stopped > 0 and is_shared_obj) else \
-                  ("medium" if is_shared_obj else "low")
+            # 纯静态潜在风险统一为 low；仅当有运行时 stop 实证时才升级
+            # （共享对象 + 实际 stop → high；非共享 + 实际 stop → medium）
+            if has_rt and rt_stopped > 0:
+                sev = "high" if is_shared_obj else "medium"
+            else:
+                sev = "low"
             conflicts.append({
                 "type": "multi_handler",
                 "severity": sev,
