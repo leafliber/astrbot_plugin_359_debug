@@ -186,7 +186,13 @@ class LogMixin:
         for e in all_entries:
             if not _is_clusterworthy(e):
                 continue
-            fp = fingerprint(e.get("msg", "") + e.get("tb", ""))
+            msg = e.get("msg", "") or ""
+            tb = e.get("tb", "") or ""
+            # 指纹策略：
+            #   - 有 tb（异常 traceback）：用 msg+tb，避免同 msg 不同 traceback 误并
+            #   - 仅 msg：只用 msg，纯重复日志（如同一 warning）应正确合并
+            #     （runtime/file 两条来源相同 msg 也会合并）
+            fp = fingerprint(msg + tb) if tb else fingerprint(msg)
             if fp not in clusters:
                 clusters[fp] = {"fingerprint": fp, "count": 0, "sample": e, "level": e.get("level")}
             clusters[fp]["count"] += 1

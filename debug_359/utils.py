@@ -79,16 +79,26 @@ def truncate(text: str, n: int = 200) -> str:
 def fingerprint(text: str) -> str:
     """生成错误指纹（用于 traceback 去重聚类）。
 
-    去除行号、内存地址、时间戳等变化部分，取稳定哈希。
+    规范化策略：去除行号、内存地址、时间戳、UUID/容器ID、
+    引号包裹的动态数值（如 model '1024' / uuid 'xxx'），
+    取稳定哈希。
     """
     if not text:
         return "empty"
+    cleaned = text
     # 去除行号: file.py:123 → file.py:?
-    cleaned = re.sub(r":\d+", ":?", text)
-    # 去除内存地址 0x7f...
-    cleaned = re.sub(r"0x[0-9a-fA-F]+", "0x?", cleaned)
-    # 去除时间戳
-    cleaned = re.sub(r"\d{4}-\d{2}-\d{2}[\dT:.]?\d{2}:\d{2}:\d{2}", "<ts>", cleaned)
+    cleaned = re.sub(r":\d+\b", ":?", cleaned)
+    # 去除内存地址 0x7f...、十六进制栈帧
+    cleaned = re.sub(r"0x[0-9a-fA-F]+\b", "0x?", cleaned)
+    # 去除完整时间戳（2024-01-01 12:00:00[.fff]）
+    cleaned = re.sub(r"\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}(?:\.\d+)?", "<ts>", cleaned)
+    # 去除 UUID / 容器 / 请求 ID（12+ 位 hex 字符串）
+    cleaned = re.sub(r"\b[a-f0-9]{12,}\b", "<id>", cleaned)
+    # 去除引号包裹的纯数字（如 model '1024'、width '256'），保留词语语义
+    cleaned = re.sub(r"'(\d+(?:\.\d+)?)'", "'?'", cleaned)
+    cleaned = re.sub(r'"(\d+(?:\.\d+)?)"', '"?"', cleaned)
+    # 折叠多余空白（traceback 中空格常有差异）
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return hashlib.md5(cleaned.encode("utf-8")).hexdigest()[:12]
 
 
