@@ -32,6 +32,7 @@ class RuntimeMixin:
             self._timings[eid]["platform"] = event.get_platform_name()
         except Exception:
             pass
+        logger.debug(f"[359debug] rt enter: eid={eid}, umo={event.unified_msg_origin}")
 
     @filter.on_llm_request()
     async def _rt_on_req(self, event: AstrMessageEvent, req) -> None:
@@ -41,7 +42,12 @@ class RuntimeMixin:
             return
         eid = id(event)
         t = self._timings.get(eid, {})
-        self.record_runtime(eid, "llm_req", time.time(), t.get("umo", ""))
+        # 如果 enter 缺失（_rt_on_wait 未触发），补建 timings 槽
+        if not t:
+            t = self._timings.setdefault(eid, {"umo": event.unified_msg_origin})
+            logger.info(f"[359debug] rt: enter 缺失，在 req 阶段补建 eid={eid}")
+        t["llm_req"] = time.time()
+        logger.debug(f"[359debug] rt llm_req: eid={eid}, has_enter={'enter' in t}")
 
     @filter.on_llm_response()
     async def _rt_on_resp(self, event: AstrMessageEvent, resp) -> None:
@@ -52,14 +58,25 @@ class RuntimeMixin:
         eid = id(event)
         t = self._timings.get(eid, {})
         ts = time.time()
-        self.record_runtime(eid, "llm_resp", ts, t.get("umo", ""))
-        # 计算 LLM 阶段耗时
         llm_req = t.get("llm_req")
         if llm_req:
+            llm_dur = ts - llm_req
             self._runtime_buf.append({
                 "ts": ts, "umo": t.get("umo", ""), "stage": "llm",
-                "dur": ts - llm_req, "platform": t.get("platform", ""),
+                "dur": llm_dur, "platform": t.get("platform", ""),
             })
+        else:
+            # llm_req 缺失 — 用 enter 或当前时间作为 fallback
+            fallback_start = t.get("enter") or ts
+            self._runtime_buf.append({
+                "ts": ts, "umo": t.get("umo", event.unified_msg_origin),
+                "stage": "llm", "dur": max(0, ts - fallback_start),
+                "platform": t.get("platform", ""),
+            })
+            logger.info(
+                f"[359debug] rt resp: llm_req 缺失 eid={eid}, "
+                f"has_enter={'enter' in t}, used fallback"
+            )
 
     @filter.after_message_sent()
     async def _rt_on_sent(self, event: AstrMessageEvent) -> None:
@@ -84,6 +101,22 @@ class RuntimeMixin:
                     "WARN", "runtime",
                     f"慢响应: {fmt_duration(total_dur)} (阈值 {fmt_duration(threshold)})",
                     "runtime",
+                )
+        else:
+            # enter 缺失 — 如果 llm_req 存在，用它作为 fallback
+            fallback_start = t.get("llm_req")
+            if fallback_start:
+                total_dur = ts - fallback_start
+                self._runtime_buf.append({
+                    "ts": ts, "umo": t.get("umo", event.unified_msg_origin),
+                    "stage": "total", "dur": total_dur,
+                    "platform": t.get("platform", ""),
+                })
+                logger.info(f"[359debug] rt sent: enter 缺失，用 llm_req fallback eid={eid}")
+            else:
+                logger.info(
+                    f"[359debug] rt sent: 无任何起始时间戳 eid={eid}, "
+                    f"timings_keys={list(t.keys())}"
                 )
         self.cleanup_event(eid)
 

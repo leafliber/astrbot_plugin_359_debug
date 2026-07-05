@@ -48,6 +48,14 @@ interface DiagReport {
     alert_history?: number;
     token_cache?: number | string;
   };
+  runtime_chain?: {
+    wait_calls?: number;
+    req_calls?: number;
+    resp_calls?: number;
+    sent_calls?: number;
+    timings_active?: number;
+    runtime_buf_len?: number;
+  };
 }
 
 /** 心跳友好名映射 */
@@ -246,6 +254,55 @@ export default function SelfDiag() {
               })}
             </div>
           </div>
+
+          {/* 运行时链路完整性 */}
+          {data.runtime_chain && (() => {
+            const rc = data.runtime_chain;
+            const chain = [
+              { label: '等待请求 (wait)', calls: rc.wait_calls ?? 0 },
+              { label: 'LLM请求 (req)', calls: rc.req_calls ?? 0 },
+              { label: 'LLM响应 (resp)', calls: rc.resp_calls ?? 0 },
+              { label: '消息发送后 (sent)', calls: rc.sent_calls ?? 0 },
+            ];
+            const brokenAt = chain.findIndex((c) => c.calls === 0);
+            const hasData = (rc.runtime_buf_len ?? 0) > 0;
+            return (
+              <div className="self-diag__section">
+                <div className="self-diag__section-title">
+                  运行时链路
+                  {brokenAt >= 0 && !hasData && (
+                    <span className="self-diag__bind-tag self-diag__bind-tag--err" style={{ marginLeft: 8 }}>
+                      断链 at: {chain[brokenAt].label}
+                    </span>
+                  )}
+                  {hasData && (
+                    <span className="self-diag__bind-tag" style={{ marginLeft: 8, background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}>
+                      缓冲 {rc.runtime_buf_len} 条
+                    </span>
+                  )}
+                </div>
+                <div className="self-diag__chain-flow">
+                  {chain.map((c, i) => {
+                    const cls = c.calls > 0 ? 'ok' : 'broken';
+                    return (
+                      <div key={i} className="self-diag__chain-step">
+                        <div className={`self-diag__chain-node self-diag__chain-node--${cls}`}>
+                          {c.calls > 0 ? '✓' : '✗'}
+                        </div>
+                        <div className="self-diag__chain-label">{c.label}</div>
+                        <div className="self-diag__chain-count">{c.calls} 次</div>
+                        {i < chain.length - 1 && (
+                          <div className={`self-diag__chain-arrow ${chain[i + 1].calls === 0 ? 'broken' : ''}`}>
+                            →
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 心跳详情 */}
           {hbCount > 0 && (

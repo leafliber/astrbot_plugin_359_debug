@@ -186,6 +186,17 @@ class StoreMixin:
             "token_cache": len(self._token_cache) if hasattr(self, "_token_cache") else "N/A",
         }
 
+        # 7. 运行时链路完整性（哪个环节断了）
+        rt_hb = self._hook_heartbeat
+        report["runtime_chain"] = {
+            "wait_calls": rt_hb.get("_rt_on_wait", {}).get("calls", 0),
+            "req_calls": rt_hb.get("_rt_on_req", {}).get("calls", 0),
+            "resp_calls": rt_hb.get("_rt_on_resp", {}).get("calls", 0),
+            "sent_calls": rt_hb.get("_rt_on_sent", {}).get("calls", 0),
+            "timings_active": len(self._timings),
+            "runtime_buf_len": len(self._runtime_buf),
+        }
+
         return report
 
     # ==================== 配置 ====================
