@@ -1,1 +1,7 @@
-{}
+{
+  "enabled": {
+    "description": "359度 Debug 总开关（此开关仅用于框架面板展示，实际不生效）。所有详细设置请在 WebUI → 插件详情 → Pages → 设置 页面中修改，配置通过 KV 存储持久化。",
+    "type": "bool",
+    "default": true
+  }
+}

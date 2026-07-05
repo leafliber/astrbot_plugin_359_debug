@@ -899,6 +899,13 @@ table.data-table .cell-error  { color: var(--color-error); }
   color: var(--text-muted);
 }
 
+/* 内联表单行：左侧文字 + 右侧开关 */
+.form-row--inline > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 /* 开关 */
 .toggle {
   position: relative;

@@ -41,9 +41,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     <>
       <header className="app-header">
         <Link to="/" className="app-header__brand">
-          <span className="brand-icon">+</span>
-          <span>359度 Debug</span>
-          <span className="brand-sub">· 359°体检</span>
+          <span>359健康检查</span>
         </Link>
         <nav className="app-header__nav">
           {NAV_ITEMS.map((item) => (

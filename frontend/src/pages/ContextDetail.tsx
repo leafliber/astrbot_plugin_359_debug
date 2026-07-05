@@ -24,6 +24,7 @@ interface LastSnapshot {
   system_prompt_tokens?: number;
   system_prompt_changed?: boolean;
   contexts_count?: number;
+  contexts_tokens?: number;
   tools?: string[];
   extra_parts_count?: number;
   extra_texts?: string[];
@@ -122,35 +123,53 @@ export default function ContextDetail() {
         <>
           {/* 最近快照概要 */}
           <h2 className="section-title">最近快照</h2>
-          <div className="stat-grid" style={{ marginBottom: 20 }}>
-            <div className="stat-block">
-              <div className="stat-block__label">模型</div>
-              <div className="stat-block__value" style={{ fontSize: 16 }}>
-                {snap?.model ?? '-'}
+          {snap?.available ? (
+            <div className="stat-grid" style={{ marginBottom: 20 }}>
+              <div className="stat-block">
+                <div className="stat-block__label">模型</div>
+                <div className="stat-block__value" style={{ fontSize: 16 }}>
+                  {snap.model || '-'}
+                </div>
+              </div>
+              <div className="stat-block">
+                <div className="stat-block__label">系统提示词长度</div>
+                <div className="stat-block__value">{fmt(snap.system_prompt_len)}</div>
+                <div className="stat-block__sub">字符</div>
+              </div>
+              <div className="stat-block">
+                <div className="stat-block__label">系统提示词 Token</div>
+                <div className="stat-block__value text-primary">{fmt(snap.system_prompt_tokens)}</div>
+              </div>
+              <div className="stat-block">
+                <div className="stat-block__label">上下文条数</div>
+                <div className="stat-block__value">{fmt(snap.contexts_count)}</div>
+              </div>
+              <div className="stat-block">
+                <div className="stat-block__label">工具数</div>
+                <div className="stat-block__value">{fmt(snap.tools?.length)}</div>
+              </div>
+              <div className="stat-block">
+                <div className="stat-block__label">附加部分</div>
+                <div className="stat-block__value">{fmt(snap.extra_parts_count)}</div>
+              </div>
+              <div className="stat-block">
+                <div className="stat-block__label">总 Token</div>
+                <div className="stat-block__value text-primary">{fmt(breakdown.total)}</div>
+              </div>
+              <div className="stat-block">
+                <div className="stat-block__label">Prompt 变更</div>
+                <div className={'stat-block__value ' + (snap.system_prompt_changed ? 'cell-warn' : 'cell-good')}>
+                  {snap.system_prompt_changed ? '⚠ 已变更' : '✓ 稳定'}
+                </div>
               </div>
             </div>
-            <div className="stat-block">
-              <div className="stat-block__label">系统提示词长度</div>
-              <div className="stat-block__value">{fmt(snap?.system_prompt_len)}</div>
-              <div className="stat-block__sub">字符</div>
+          ) : (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div className="timeline-empty">
+                暂无上下文数据 — 请先向 Bot 发送一条消息触发 LLM 请求
+              </div>
             </div>
-            <div className="stat-block">
-              <div className="stat-block__label">上下文条数</div>
-              <div className="stat-block__value">{fmt(snap?.contexts_count)}</div>
-            </div>
-            <div className="stat-block">
-              <div className="stat-block__label">工具数</div>
-              <div className="stat-block__value">{fmt(snap?.tools?.length ?? 0)}</div>
-            </div>
-            <div className="stat-block">
-              <div className="stat-block__label">附加部分</div>
-              <div className="stat-block__value">{fmt(snap?.extra_parts_count)}</div>
-            </div>
-            <div className="stat-block">
-              <div className="stat-block__label">总 Token</div>
-              <div className="stat-block__value text-primary">{fmt(data?.token_breakdown?.total)}</div>
-            </div>
-          </div>
+          )}
 
           <div className="two-col">
             {/* Token 构成饼图 */}

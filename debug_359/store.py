@@ -52,6 +52,7 @@ class StoreMixin:
         self._tool_buf: deque = deque(maxlen=500)
         self._context_last: dict[str, dict] = {}      # {umo: last_req_snapshot}
         self._context_history: deque = deque(maxlen=50)  # 多轮 prompt 用于缓存破坏检测
+        self._ctx_head_snapshots: dict[int, str] = {}    # {event_id: head_system_prompt}
         self._log_entries: deque = deque(maxlen=500)  # on_plugin_error 捕获
         self._agent_trajectories: deque = deque(maxlen=50)
         # SSE 事件总线

@@ -19,18 +19,17 @@ from .utils import estimate_tokens, health_score_from_metric, truncate
 class ContextMixin:
     """上下文注入分析。依赖 StoreMixin 的缓冲。"""
 
-    # system_prompt 前态缓存（head hook 记录，tail hook 对比）
-    _ctx_head_snapshots: dict[int, str] = {}
-
     @filter.on_llm_request(priority=100000)
     async def _ctx_on_req_head(self, event: AstrMessageEvent, req) -> None:
         """head：其他插件修改前，记录 system_prompt 原态。"""
         if not self.is_enabled("context_dump"):
             return
         try:
-            self._ctx_head_snapshots[id(event)] = getattr(req, "system_prompt", "") or ""
-        except Exception:
-            pass
+            sp = getattr(req, "system_prompt", "") or ""
+            self._ctx_head_snapshots[id(event)] = sp
+            logger.debug(f"[359debug] ctx head hook: sp_len={len(sp)}, umo={event.unified_msg_origin}")
+        except Exception as e:
+            logger.warning(f"[359debug] 上下文 head hook 异常: {e}", exc_info=True)
 
     @filter.on_llm_request(priority=-100000)
     async def _ctx_on_req_tail(self, event: AstrMessageEvent, req) -> None:
@@ -64,6 +63,15 @@ class ContextMixin:
             # 临时内容标记审计（F8）
             temp_count = sum(1 for p in extra_parts if getattr(p, "_temp", False))
 
+            # 估算 contexts 的 token 数（基于 JSON 序列化长度）
+            contexts_raw = getattr(req, "contexts", []) or []
+            contexts_json = ""
+            try:
+                import json as _json
+                contexts_json = _json.dumps(contexts_raw, ensure_ascii=False)
+            except Exception:
+                contexts_json = str(contexts_raw)
+
             snapshot = {
                 "ts": time.time(),
                 "umo": umo,
@@ -73,18 +81,25 @@ class ContextMixin:
                 "system_prompt_tokens": estimate_tokens(sp),
                 "system_prompt_changed": sp != head_sp,
                 "head_sp": head_sp,
-                "contexts_count": len(getattr(req, "contexts", []) or []),
+                "contexts_count": len(contexts_raw),
+                "contexts_tokens": estimate_tokens(contexts_json),
                 "tools": tools,
                 "extra_parts_count": len(extra_parts),
                 "extra_texts": extra_texts,
                 "temp_parts_count": temp_count,
             }
             self.record_context(umo, snapshot)
+            logger.info(
+                f"[359debug] ctx tail hook: umo={umo}, sp_len={len(sp)}, "
+                f"sp_tokens={snapshot['system_prompt_tokens']}, "
+                f"ctx_count={snapshot['contexts_count']}, "
+                f"tools={len(tools)}, extra={len(extra_parts)}"
+            )
 
             # F1 缓存破坏检测
             await self._ctx_check_cache_disruption(umo, sp)
         except Exception as e:
-            logger.debug(f"[359debug] 上下文采集异常: {e}")
+            logger.warning(f"[359debug] 上下文采集异常: {e}", exc_info=True)
 
     async def _ctx_check_cache_disruption(self, umo: str, sp: str) -> None:
         """检测 system_prompt 是否连续多轮不稳定变化（F1 缓存破坏）。"""
@@ -124,6 +139,7 @@ class ContextMixin:
             "system_prompt_tokens": snap.get("system_prompt_tokens", 0),
             "system_prompt_changed": snap.get("system_prompt_changed", False),
             "contexts_count": snap.get("contexts_count", 0),
+            "contexts_tokens": snap.get("contexts_tokens", 0),
             "tools": snap.get("tools", []),
             "extra_parts_count": snap.get("extra_parts_count", 0),
             "extra_texts": snap.get("extra_texts", []),
@@ -153,10 +169,10 @@ class ContextMixin:
         token_breakdown = {}
         if snap.get("available"):
             sp_t = snap.get("system_prompt_tokens", 0)
-            ctx_t = estimate_tokens(str(snap.get("contexts_count", 0)))
+            ctx_t = snap.get("contexts_tokens", 0)
             tool_t = estimate_tokens(",".join(snap.get("tools", [])))
             extra_t = sum(estimate_tokens(t) for t in snap.get("extra_texts", []))
-            total = sp_t + ctx_t + tool_t + extra_t or 1
+            total = sp_t + ctx_t + tool_t + extra_t
             token_breakdown = {
                 "system_prompt": sp_t,
                 "contexts": ctx_t,
@@ -164,11 +180,11 @@ class ContextMixin:
                 "extra_parts": extra_t,
                 "total": total,
                 "pct": {
-                    "system_prompt": round(sp_t / total * 100, 1),
-                    "contexts": round(ctx_t / total * 100, 1),
-                    "tools": round(tool_t / total * 100, 1),
-                    "extra_parts": round(extra_t / total * 100, 1),
-                },
+                    "system_prompt": round(sp_t / total * 100, 1) if total else 0,
+                    "contexts": round(ctx_t / total * 100, 1) if total else 0,
+                    "tools": round(tool_t / total * 100, 1) if total else 0,
+                    "extra_parts": round(extra_t / total * 100, 1) if total else 0,
+                } if total else {},
             }
         # 缓存告警时间线
         cache_alerts = [a for a in self.recent_alerts(50) if a.get("module") == "context"]
