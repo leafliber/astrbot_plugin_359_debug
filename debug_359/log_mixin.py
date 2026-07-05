@@ -46,10 +46,13 @@ class LogMixin:
     # ==================== 日志文件读取 ====================
 
     def _lg_tail_file(self, path: str, n: int) -> list[str]:
-        """读取文件尾部 n 行。"""
+        """读取文件尾部 n 行。n=0 表示读取全部。"""
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                return list(deque(f, maxlen=n))
+                if n and n > 0:
+                    return list(deque(f, maxlen=n))
+                else:
+                    return f.readlines()
         except Exception as e:
             logger.debug(f"[359debug] 读取日志失败: {e}")
             return []
@@ -136,14 +139,19 @@ class LogMixin:
         read_all = int(limit) == -1
         if not read_all:
             limit = max(1, min(int(limit), 5000))
-        # 1. 文件日志 —— 读取行数按 limit 动态放大，至少读取配置的 log_tail_lines
+        # 1. 文件日志 —— 读取行数：
+        #    全部模式：读取整个文件（n=0 表示不限）
+        #    有限模式：max(cfg_lines, limit * 4)
         log_path = self.get_log_file_path()
         file_entries = []
         file_exists = os.path.isfile(log_path)
         if file_exists:
             cfg_lines = int(self.cfg("log_tail_lines", 500))
-            n = cfg_lines * 20 if read_all else max(cfg_lines, limit * 4)
-            lines = self._lg_tail_file(log_path, n)
+            if read_all:
+                lines = self._lg_tail_file(log_path, 0)
+            else:
+                n = max(cfg_lines, limit * 4)
+                lines = self._lg_tail_file(log_path, n)
             for line in lines:
                 parsed = self._lg_parse_line(line)
                 if parsed:
@@ -188,13 +196,17 @@ class LogMixin:
                 continue
             msg = e.get("msg", "") or ""
             tb = e.get("tb", "") or ""
-            # 指纹策略：
-            #   - 有 tb（异常 traceback）：用 msg+tb，避免同 msg 不同 traceback 误并
-            #   - 仅 msg：只用 msg，纯重复日志（如同一 warning）应正确合并
-            #     （runtime/file 两条来源相同 msg 也会合并）
-            fp = fingerprint(msg + tb) if tb else fingerprint(msg)
+            # 指纹策略（重写版）：
+            # 统一用 fingerprint(msg + tb)，fingerprint 已激进规范化所有动态内容
+            # （时间戳、数字、地址、UUID、行号等），确保同结构不同参数的日志合并。
+            # 有 tb 时附加 tb 的前 200 字符（保留异常类型骨架，避免不同异常误并）。
+            fp_input = msg if not tb else msg + "\n" + tb[:200]
+            fp = fingerprint(fp_input)
             if fp not in clusters:
-                clusters[fp] = {"fingerprint": fp, "count": 0, "sample": e, "level": e.get("level")}
+                clusters[fp] = {
+                    "fingerprint": fp, "count": 0,
+                    "sample": e, "level": e.get("level"),
+                }
             clusters[fp]["count"] += 1
         cluster_list = sorted(clusters.values(), key=lambda x: -x["count"])[:20]
 
