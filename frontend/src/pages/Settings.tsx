@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApi, apiPost } from '../api/bridge';
+import SelfDiag from '../components/SelfDiag';
 
 /**
  * 插件配置结构（键名严格对齐后端 CONFIG_DEFAULTS）。
@@ -112,6 +113,9 @@ export default function Settings() {
     <div>
       <h1 className="page-title">⚙️ 设置</h1>
       <p className="page-subtitle">管理各分析模块的开关与阈值</p>
+
+      {/* 自我诊断面板（钩子链路健康状况） */}
+      <SelfDiag />
 
       {/* 功能模块开关 */}
       <h2 className="section-title">功能模块</h2>

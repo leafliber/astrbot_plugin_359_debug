@@ -105,54 +105,7 @@ class CommandsMixin:
         lines.append(self.fmt_lock_oneline())
         lines.append("─" * 30)
         lines.append("完整 360°体检报告请见 WebUI → 插件详情 → Pages")
-        yield event.plain_result("\n".join(lines))
-
-    @debug_group.command("diag", alias={"诊断", "hooks", "钩子"})
-    async def cmd_diag(self, event: AstrMessageEvent):
-        """钩子链路诊断"""
-        if self._check_admin(event):
-            yield event.plain_result("无权限：仅管理员可执行诊断指令。")
-            return
-        report = self.diagnose_hooks()
-        lines = ["359度 Debug · 钩子链路诊断", "─" * 30]
-
-        # 注册表状态
-        reg = report.get("registry", {})
-        lines.append(f"注册表: 共 {reg.get('total', 0)} 个 handler，本插件 {reg.get('ours', 0)} 个")
-        by_evt = reg.get("by_event", {})
-        if by_evt:
-            lines.append("  按事件: " + ", ".join(f"{k}={v}" for k, v in sorted(by_evt.items())))
-
-        # 绑定状态
-        bnd = report.get("binding", {})
-        lines.append(f"绑定: bound={bnd.get('bound', 0)}, unbound={bnd.get('unbound', 0)}")
-        for d in bnd.get("details", []):
-            flag = "✓" if d["bound"] else "✗"
-            sm = "✓" if d.get("in_star_map") else "✗"
-            en = "✓" if d.get("enabled") else "✗"
-            lines.append(f"  {flag}{sm}{en} {d['name']} ({d['event']}) pri={d.get('priority', 0)}")
-
-        # 心跳
-        hb = report.get("heartbeat", {})
-        if hb:
-            lines.append("心跳（钩子实际触发次数）:")
-            for name, info in sorted(hb.items()):
-                lines.append(f"  {name}: {info['calls']} 次")
-        else:
-            lines.append("⚠ 心跳: 无 — 没有任何钩子被触发过！")
-
-        # 缓冲
-        buf = report.get("buffers", {})
-        lines.append(f"缓冲: runtime={buf.get('runtime_buf', 0)}, tool={buf.get('tool_buf', 0)}, "
-                      f"context={buf.get('context_last_keys', 0)}, ctx_hist={buf.get('context_history', 0)}")
-
-        # 配置
-        cfg = report.get("config", {})
-        mod_switches = {k: v for k, v in cfg.items() if k.startswith("enable_")}
-        lines.append("开关: " + ", ".join(f"{k}={v}" for k, v in sorted(mod_switches.items())))
-
-        lines.append("─" * 30)
-        lines.append("完整诊断 JSON: WebUI → 插件详情 → API /diag")
+        lines.append("钩子链路自诊断请见 WebUI → 插件详情 → Pages → 设置 顶部")
         yield event.plain_result("\n".join(lines))
 
     def _check_admin(self, event: AstrMessageEvent) -> bool:
