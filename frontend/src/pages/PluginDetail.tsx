@@ -34,6 +34,51 @@ interface LifecycleEvent {
   plugin?: string;
 }
 
+interface HookHandler {
+  plugin?: string;
+  reserved?: boolean;
+  handler?: string;
+  full_name?: string;
+  priority?: number;
+  enabled?: boolean;
+  risks?: string[];
+  desc?: string;
+}
+
+interface HookGroup {
+  event_type?: string;
+  label?: string;
+  risk_level?: string;
+  count?: number;
+  multi_plugin?: boolean;
+  same_priority?: boolean;
+  handlers?: HookHandler[];
+}
+
+interface HookConflict {
+  type?: string;
+  severity?: string;
+  event_type?: string;
+  event_label?: string;
+  plugin?: string;
+  handler?: string;
+  line?: number;
+  count?: number;
+  plugins?: string[];
+  priority?: number;
+  desc?: string;
+}
+
+interface HooksReport {
+  total_handlers?: number;
+  total_event_types?: number;
+  groups?: HookGroup[];
+  conflicts?: HookConflict[];
+  conflict_count?: number;
+  high_risk_count?: number;
+  error?: string;
+}
+
 interface PluginData {
   total?: number;
   active?: number;
@@ -42,6 +87,7 @@ interface PluginData {
   security_alerts?: SecurityAlert[];
   high_alert_count?: number;
   conflicts?: Conflict[];
+  hooks?: HooksReport;
   lifecycle_log?: LifecycleEvent[];
 }
 
@@ -66,6 +112,34 @@ const severityClass = (sev: string | undefined): string => {
   return 'severity-low';
 };
 
+// 钩子风险标签 → 中文
+const RISK_LABELS: Record<string, string> = {
+  event_stop: '事件终止',
+  overwrite_system_prompt: '覆盖Prompt',
+  overwrite_result: '覆盖结果',
+};
+
+const CONFLICT_TYPE_LABELS: Record<string, string> = {
+  multi_handler: '多插件监听',
+  event_stop: '事件终止',
+  overwrite: '覆盖风险',
+  same_priority: '同优先级',
+};
+
+const renderRiskBadge = (risk: string) => {
+  const cls =
+    risk === 'event_stop'
+      ? 'severity-high'
+      : risk === 'overwrite_system_prompt'
+        ? 'severity-medium'
+        : 'severity-low';
+  return (
+    <span key={risk} className={`tag ${cls === 'severity-high' ? 'inactive' : 'active'}`} style={{ marginRight: 4 }}>
+      {RISK_LABELS[risk] || risk}
+    </span>
+  );
+};
+
 export default function PluginDetail() {
   const { data, loading, error } = useApi<PluginData>('/plugin');
 
@@ -73,10 +147,13 @@ export default function PluginDetail() {
   const alerts = data?.security_alerts ?? [];
   const conflicts = data?.conflicts ?? [];
   const audit = data?.lifecycle_log ?? [];
+  const hooks = data?.hooks;
   const total = data?.total ?? plugins.length;
   const active = data?.active ?? plugins.filter((p) => p.activated).length;
   const inactive = data?.inactive ?? plugins.filter((p) => !p.activated).length;
   const highAlerts = data?.high_alert_count ?? alerts.filter((a) => a.severity === 'high').length;
+  const hookConflicts = hooks?.conflicts ?? [];
+  const hookHighRisk = hooks?.high_risk_count ?? 0;
 
   return (
     <div>
@@ -125,6 +202,18 @@ export default function PluginDetail() {
               <div className={'stat-block__value ' + (conflicts.length > 0 ? 'text-warning' : 'text-primary')}>
                 {conflicts.length}
               </div>
+            </div>
+            <div className="stat-block">
+              <div className="stat-block__label">钩子总数</div>
+              <div className="stat-block__value">{hooks?.total_handlers ?? '-'}</div>
+              <div className="stat-block__sub">{hooks?.total_event_types ?? 0} 类事件</div>
+            </div>
+            <div className="stat-block">
+              <div className="stat-block__label">钩子冲突</div>
+              <div className={'stat-block__value ' + (hookHighRisk > 0 ? 'text-error' : hookConflicts.length > 0 ? 'text-warning' : 'text-primary')}>
+                {hookConflicts.length}
+              </div>
+              <div className="stat-block__sub">{hookHighRisk} 高危</div>
             </div>
           </div>
 
@@ -261,6 +350,134 @@ export default function PluginDetail() {
             <div className="card">
               <div className="timeline-empty">未检测到插件冲突</div>
             </div>
+          )}
+
+          {/* 钩子全景与冲突 */}
+          <h2 className="section-title">🪝 钩子全景与冲突</h2>
+          <p className="page-subtitle" style={{ marginBottom: 12 }}>
+            AstrBot 所有 <code>@filter.on_xxx()</code> 钩子按优先级串行执行；
+            多插件监听同一钩子时，<strong>事件终止</strong>会静默掐断后续处理器，<strong>覆盖赋值</strong>会抹掉其它插件的修改。
+          </p>
+
+          {hooks?.error ? (
+            <div className="card">
+              <div className="timeline-empty" style={{ color: 'var(--text-error)' }}>
+                钩子分析不可用：{hooks.error}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* 钩子冲突告警 */}
+              {hookConflicts.length > 0 && (
+                <div className="table-wrapper" style={{ marginBottom: 16 }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>类型</th>
+                        <th>严重级别</th>
+                        <th>钩子</th>
+                        <th>涉及插件</th>
+                        <th>说明</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hookConflicts.map((c, i) => (
+                        <tr key={i}>
+                          <td>
+                            <span className="text-mono">{CONFLICT_TYPE_LABELS[c.type ?? ''] ?? c.type}</span>
+                          </td>
+                          <td className={severityClass(c.severity)}>{c.severity}</td>
+                          <td>{c.event_label ?? c.event_type ?? '-'}</td>
+                          <td style={{ maxWidth: 200 }}>
+                            {c.plugin ? (
+                              <span className="text-mono">{c.plugin}{c.handler ? `.${c.handler}` : ''}</span>
+                            ) : c.plugins && c.plugins.length > 0 ? (
+                              <span className="text-mono">{c.plugins.join(', ')}</span>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+                          <td style={{ whiteSpace: 'normal', fontSize: '0.85em' }}>{c.desc ?? '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* 钩子全景图：按事件分组 */}
+              {(hooks?.groups ?? []).map((g, gi) => (
+                <div key={gi} className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <strong>{g.label ?? g.event_type}</strong>
+                      <span className="text-mono" style={{ marginLeft: 8, fontSize: '0.8em', color: 'var(--text-muted)' }}>
+                        {g.event_type}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <span className="tag active">{g.count} 个处理器</span>
+                      {g.multi_plugin && (
+                        <span className="tag inactive">多插件</span>
+                      )}
+                      {g.risk_level === 'high' && (
+                        <span className="tag inactive" style={{ background: 'var(--error)' }}>高风险</span>
+                      )}
+                      {g.same_priority && (
+                        <span className="tag inactive">同优先级</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="table-wrapper">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>执行序</th>
+                          <th>插件</th>
+                          <th>处理器</th>
+                          <th className="numeric">优先级</th>
+                          <th>状态</th>
+                          <th>风险</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(g.handlers ?? []).map((h, hi) => (
+                          <tr key={hi}>
+                            <td className="numeric text-muted">{hi + 1}</td>
+                            <td>
+                              <span className="text-mono">{h.plugin ?? '?'}</span>
+                              {h.reserved && (
+                                <span className="tag active" style={{ marginLeft: 4, fontSize: '0.7em' }}>保留</span>
+                              )}
+                            </td>
+                            <td className="text-mono">{h.handler ?? '-'}</td>
+                            <td className="numeric">{h.priority ?? 0}</td>
+                            <td>
+                              <span className={'tag ' + (h.enabled ? 'active' : 'inactive')}>
+                                {h.enabled ? '启用' : '禁用'}
+                              </span>
+                            </td>
+                            <td>
+                              {(h.risks ?? []).length === 0 ? (
+                                <span className="text-muted">-</span>
+                              ) : (
+                                (h.risks ?? []).map(renderRiskBadge)
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+
+              {(!hooks?.groups || hooks.groups.length === 0) && (
+                <div className="card">
+                  <div className="timeline-empty">未发现已注册的钩子</div>
+                </div>
+              )}
+            </>
           )}
 
           {/* 生命周期审计 */}

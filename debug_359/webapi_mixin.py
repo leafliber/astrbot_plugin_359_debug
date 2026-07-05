@@ -32,6 +32,7 @@ class WebApiMixin:
             ("/tool", self._api_tool, ["GET"], "工具调用详情"),
             ("/log", self._api_log, ["GET"], "日志详情"),
             ("/plugin", self._api_plugin, ["GET"], "插件分析详情"),
+            ("/hooks", self._api_hooks, ["GET"], "钩子全景与冲突"),
             ("/lock", self._api_lock, ["GET"], "会话锁详情"),
             ("/settings", self._api_get_settings, ["GET"], "读取配置"),
             ("/settings", self._api_save_settings, ["POST"], "保存配置"),
@@ -164,6 +165,14 @@ class WebApiMixin:
     async def _api_plugin(self) -> Any:
         from quart import jsonify
         return jsonify(await self.get_plugin_detail())
+
+    async def _api_hooks(self) -> Any:
+        """钩子全景图与冲突检测。"""
+        from quart import jsonify
+        try:
+            return jsonify(self.scan_hooks())
+        except Exception as e:
+            return jsonify({"error": str(e), "groups": [], "conflicts": []})
 
     async def _api_lock(self) -> Any:
         from quart import jsonify
