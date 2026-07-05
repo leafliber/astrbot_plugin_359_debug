@@ -231,10 +231,41 @@ class AiCheckMixin:
             elif key == "plugin":
                 conflicts = detail.get("conflicts", [])
                 lifecycle = detail.get("lifecycle_log", [])
+                hooks = detail.get("hooks", {}) or {}
+                hook_groups = hooks.get("groups", [])
+                hook_conflicts = hooks.get("conflicts", [])
+                hook_high = hooks.get("high_risk_count", 0)
+                # 提取关键钩子冲突摘要（最多 5 条，按 severity 排序）
+                key_hook_issues = []
+                for hc in hook_conflicts[:5]:
+                    sev = hc.get("severity", "info")
+                    label = hc.get("event_label", hc.get("event_type", ""))
+                    desc = hc.get("desc", "")
+                    key_hook_issues.append(f"[{sev}] {label}: {desc}")
+                hook_summary = (
+                    f"已注册钩子：{hooks.get('total_handlers', 0)} 个 / "
+                    f"{hooks.get('total_event_types', 0)} 类事件，"
+                    f"钩子冲突：{hooks.get('conflict_count', 0)} 条"
+                    f"（高危 {hook_high}）"
+                )
+                hook_detail = "\n".join(key_hook_issues) if key_hook_issues else "无"
+                # 多插件监听的高风险钩子（共享对象）
+                shared_hot = [
+                    g.get("label", g.get("event_type", ""))
+                    for g in hook_groups
+                    if g.get("shared_obj") and g.get("multi_plugin")
+                ][:5]
+                shared_line = (
+                    "共享对象钩子被多插件监听：" + "、".join(shared_hot)
+                    if shared_hot else "无共享对象钩子竞争"
+                )
                 return (
                     f"冲突数：{len(conflicts)}，"
                     f"生命周期事件：{len(lifecycle)}条\n"
-                    f"冲突：{json.dumps(conflicts[:3], ensure_ascii=False)[:400]}"
+                    f"钩子全景：{hook_summary}\n"
+                    f"{shared_line}\n"
+                    f"钩子冲突详情：\n{hook_detail}\n"
+                    f"指令冲突：{json.dumps(conflicts[:3], ensure_ascii=False)[:300]}"
                 )
             elif key == "lock":
                 summary = detail.get("summary", {})

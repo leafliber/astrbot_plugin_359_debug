@@ -20,6 +20,37 @@ interface ErrorCluster {
   level?: string;
 }
 
+interface Diagnosis {
+  category?: string;
+  category_label?: string;
+  severity?: string;
+  count?: number;
+  levels?: string[];
+  root_cause?: string;
+  suggestion?: string;
+  evidence?: string[];
+  sources?: string[];
+  first_seen?: string;
+  last_seen?: string;
+}
+
+interface UnmatchedSample {
+  level?: string;
+  module?: string;
+  msg?: string;
+  time?: string;
+}
+
+interface DiagnosisReport {
+  total_issues?: number;
+  total_affected?: number;
+  total_candidates?: number;
+  max_severity?: string;
+  diagnoses?: Diagnosis[];
+  unmatched_samples?: UnmatchedSample[];
+  summary?: string;
+}
+
 interface LogData {
   file_available?: boolean;
   total_by_level?: Record<string, number>;
@@ -30,6 +61,7 @@ interface LogData {
   error_clusters?: ErrorCluster[];
   file_path?: string;
   hint?: string;
+  diagnosis?: DiagnosisReport;
 }
 
 const fmt = (v: unknown): string => {
@@ -69,7 +101,7 @@ export default function LogDetail() {
   const totalByLevel = data?.total_by_level ?? data?.by_level ?? {};
   const allEntries = data?.entries ?? data?.errors ?? [];
   const clusters = data?.clusters ?? data?.error_clusters ?? [];
-
+  const diagnosis = data?.diagnosis;
   const filteredEntries = useMemo(() => {
     return allEntries.filter((e) => {
       const lvl = (e.level || '').toUpperCase();
@@ -205,6 +237,69 @@ export default function LogDetail() {
             </span>
           </div>
 
+          {/* WARN/ERROR 智能诊断 */}
+          <h2 className="section-title">🔍 WARN/ERROR 智能诊断</h2>
+          <p className="form-row__desc" style={{ marginBottom: 8 }}>
+            纯规则引擎自动分类 WARN/ERROR 日志，给出根因分析与修复建议，不依赖 LLM。
+          </p>
+
+          {diagnosis && (diagnosis.total_issues ?? 0) > 0 ? (
+            <>
+              {/* 摘要条 */}
+              <div className="alert-banner" style={{
+                background: (diagnosis.max_severity === 'high')
+                  ? 'var(--error-bg, rgba(220,53,69,0.1))'
+                  : 'var(--warn-bg, rgba(255,193,7,0.1))',
+                borderColor: diagnosis.max_severity === 'high' ? 'var(--error)' : 'var(--warn, #f0ad4e)',
+              }}>
+                <strong>{diagnosis.summary}</strong>
+                <span style={{ marginLeft: 12, fontSize: '0.88em' }}>
+                  分析范围：{diagnosis.total_candidates ?? 0} 条 WARN/ERROR，命中 {diagnosis.total_affected ?? 0} 条
+                </span>
+              </div>
+
+              {/* 诊断卡片 */}
+              {(diagnosis.diagnoses ?? []).map((d, i) => (
+                <DiagnosisCard key={i} diag={d} />
+              ))}
+
+              {/* 未匹配样例 */}
+              {(diagnosis.unmatched_samples?.length ?? 0) > 0 && (
+                <details style={{ marginTop: 12 }}>
+                  <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.88em' }}>
+                    未识别模式的 WARN/ERROR 样例（{diagnosis.unmatched_samples?.length} 条）
+                  </summary>
+                  <div className="table-wrapper" style={{ marginTop: 8 }}>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>级别</th>
+                          <th>模块</th>
+                          <th>消息</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(diagnosis.unmatched_samples ?? []).map((u, j) => (
+                          <tr key={j}>
+                            <td className={levelClass(u.level ?? 'ERROR')}>{u.level}</td>
+                            <td className="text-mono">{u.module ?? '-'}</td>
+                            <td style={{ whiteSpace: 'normal', maxWidth: 500 }}>{u.msg ?? '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
+            </>
+          ) : (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)' }}>
+                {diagnosis?.summary ?? '无 WARN/ERROR 日志，状态良好 ✓'}
+              </div>
+            </div>
+          )}
+
           {/* 错误聚类 */}
           <h2 className="section-title">错误聚类</h2>
           <p className="form-row__desc" style={{ marginBottom: 8 }}>
@@ -277,6 +372,95 @@ export default function LogDetail() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// 诊断卡片：展示一个分类的根因、建议、证据
+function DiagnosisCard({ diag }: { diag: Diagnosis }) {
+  const sev = diag.severity ?? 'low';
+  const sevColor =
+    sev === 'high' ? 'var(--error)' :
+    sev === 'medium' ? 'var(--warn, #f0ad4e)' :
+    'var(--border)';
+  const sevBg =
+    sev === 'high' ? 'rgba(220,53,69,0.06)' :
+    sev === 'medium' ? 'rgba(255,193,7,0.06)' :
+    'var(--bg-elevated, rgba(0,0,0,0.03))';
+
+  return (
+    <div className="card" style={{
+      marginBottom: 10,
+      borderLeft: `4px solid ${sevColor}`,
+      background: sevBg,
+    }}>
+      {/* 头部 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <strong style={{ fontSize: '1.05em' }}>{diag.category_label ?? diag.category ?? '未知'}</strong>
+          <span className="text-mono" style={{ fontSize: '0.78em', color: 'var(--text-muted)' }}>
+            {diag.category}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className={`tag ${sev === 'high' ? 'inactive' : 'active'}`}
+            style={sev === 'high' ? { background: 'var(--error)' } : {}}>
+            {sev === 'high' ? '高危' : sev === 'medium' ? '中危' : '低危'}
+          </span>
+          <span className="text-muted" style={{ fontSize: '0.85em' }}>
+            {diag.count} 次
+          </span>
+          {(diag.levels ?? []).map((l) => (
+            <span key={l} className={`tag ${l.includes('ERR') ? 'inactive' : 'active'}`} style={{ fontSize: '0.72em' }}>
+              {l}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* 根因 + 建议 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: '0.78em', color: 'var(--text-muted)', marginBottom: 3 }}>根因分析</div>
+          <div style={{ fontSize: '0.92em' }}>{diag.root_cause ?? '-'}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: '0.78em', color: 'var(--text-muted)', marginBottom: 3 }}>修复建议</div>
+          <div style={{ fontSize: '0.92em', color: sev === 'high' ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+            {diag.suggestion ?? '-'}
+          </div>
+        </div>
+      </div>
+
+      {/* 证据样例 */}
+      {(diag.evidence?.length ?? 0) > 0 && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ fontSize: '0.78em', color: 'var(--text-muted)', marginBottom: 3 }}>证据样例</div>
+          {(diag.evidence ?? []).map((ev, i) => (
+            <div key={i} className="text-mono" style={{
+              fontSize: '0.82em', padding: '3px 8px', marginBottom: 2,
+              background: 'var(--bg-elevated, rgba(0,0,0,0.04))', borderRadius: 3,
+              borderLeft: '2px solid var(--border)',
+              whiteSpace: 'normal', wordBreak: 'break-word',
+            }}>
+              {ev}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 涉及模块 + 时间范围 */}
+      <div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.78em', color: 'var(--text-muted)' }}>
+        {(diag.sources?.length ?? 0) > 0 && (
+          <span>模块：<span className="text-mono">{(diag.sources ?? []).join(', ')}</span></span>
+        )}
+        {diag.first_seen && (
+          <span>首次：{diag.first_seen}</span>
+        )}
+        {diag.last_seen && (
+          <span>末次：{diag.last_seen}</span>
+        )}
+      </div>
     </div>
   );
 }
