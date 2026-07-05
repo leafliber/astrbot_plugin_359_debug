@@ -201,25 +201,72 @@ class PluginMixin:
         except Exception:
             return {}
 
+    def _get_star_registry_list(self):
+        """安全获取全局 star_registry（list[StarMetadata]）。"""
+        try:
+            from astrbot.core.star.star import star_registry
+            return star_registry or []
+        except Exception:
+            return []
+
+    _self_plugin_name_cache: str | None = None
+
+    def _get_self_plugin_name(self) -> str | None:
+        """识别本插件（诊断工具自身）的插件名。
+
+        通过 star_registry 中 star_cls is self 的元数据定位，
+        用于在钩子全景图中过滤掉本插件自身的诊断钩子（避免噪声）。
+        """
+        if self._self_plugin_name_cache is not None:
+            return self._self_plugin_name_cache
+        try:
+            for meta in self._get_star_registry_list():
+                if getattr(meta, "star_cls", None) is self:
+                    name = getattr(meta, "name", None) or getattr(meta, "display_name", None)
+                    if name:
+                        self._self_plugin_name_cache = name
+                        return name
+        except Exception:
+            pass
+        return None
+
     def _resolve_plugin_name(self, handler, star_map) -> str:
         """从 handler 的模块路径解析所属插件名。
 
-        优先 star_map 精确匹配；失败则从 module_path 字符串兜底提取
-        （如 'astrbot_plugin_xxx.main' → 'astrbot_plugin_xxx'）。
+        匹配优先级：
+          1. star_map 精确匹配 handler_module_path
+          2. 前缀匹配：handler_module_path 在 star_map 某个键的"包"下
+             （处理 mixin 模块路径与 Main 类模块路径不一致的情况：
+              handler.__module__ 形如 ...debug_359.context_mixin，
+              而 star_map 键是 ...main，共同前缀是插件根包）
+          3. 从路径段中提取 astrbot_plugin_* 形态的段名
+          4. 兜底 "?"
         """
-        try:
-            module_path = getattr(handler, "handler_module_path", "") or ""
-            meta = star_map.get(module_path)
-            if meta and getattr(meta, "name", None):
-                return meta.name
-            # 兜底：从 module_path 第一段提取（去掉 .main / .sub 后缀）
-            if module_path:
-                head = module_path.split(".")[0]
-                if head and head != "astrbot":
-                    return head
-            return "astrbot" if module_path.startswith("astrbot.") else "?"
-        except Exception:
-            return "?"
+        module_path = getattr(handler, "handler_module_path", "") or ""
+        # 1. 精确匹配
+        meta = star_map.get(module_path)
+        if meta and getattr(meta, "name", None):
+            return meta.name
+        # 2. 包前缀匹配：找 star_map 中"包前缀"最长的命中
+        best_meta = None
+        best_len = 0
+        for key, m in star_map.items():
+            if not key:
+                continue
+            pkg = key.rsplit(".", 1)[0] if "." in key else key
+            if module_path.startswith(pkg + ".") and len(pkg) > best_len:
+                best_meta = m
+                best_len = len(pkg)
+        if best_meta and getattr(best_meta, "name", None):
+            return best_meta.name
+        # 3. 路径段提取 astrbot_plugin_*
+        for seg in module_path.split("."):
+            if seg.startswith("astrbot_plugin"):
+                return seg
+        # 4. AstrBot 保留插件判断
+        if module_path.startswith("astrbot."):
+            return "astrbot"
+        return "?"
 
     def _resolve_plugin_reserved(self, handler, star_map) -> bool:
         """判断 handler 所属插件是否为保留插件。"""
@@ -228,6 +275,13 @@ class PluginMixin:
             meta = star_map.get(module_path)
             if meta:
                 return bool(getattr(meta, "reserved", False))
+            # 包前缀匹配
+            for key, m in star_map.items():
+                if not key:
+                    continue
+                pkg = key.rsplit(".", 1)[0] if "." in key else key
+                if module_path.startswith(pkg + "."):
+                    return bool(getattr(m, "reserved", False))
         except Exception:
             pass
         return False
@@ -436,13 +490,18 @@ class PluginMixin:
 
         return conflicts
 
-    def scan_hooks(self) -> dict:
+    def scan_hooks(self, include_self: bool = False) -> dict:
         """钩子全景图 + 冲突检测。
 
         评级原则：
           - static + 潜在风险 → info / low / medium（看是否共享对象钩子）
           - 只有 runtime_evidence（真的发生过 stop）才评 high
         运行时数据由本插件自身注册的全套钩子上报，零侵入其它插件。
+
+        Args:
+            include_self: 是否包含本插件（诊断工具自身）注册的钩子。
+                          默认 False —— 自身的诊断钩子是观测工具而非被分析对象，
+                          会作为噪声污染全景图，故默认隐藏。
         """
         registry = self._get_star_registry()
         if registry is None:
@@ -451,6 +510,8 @@ class PluginMixin:
                     "error": "无法访问 star_handlers_registry"}
 
         star_map = self._get_star_map()
+        self_name = self._get_self_plugin_name()
+
         # 1. 按 event_type 分组
         by_event: dict[str, list] = {}
         try:
@@ -459,26 +520,32 @@ class PluginMixin:
             handlers_iter = getattr(registry, "_handlers", []) or []
 
         total = 0
+        self_handler_count = 0
         for h in handlers_iter:
             try:
+                # 提前判定归属，用于过滤自身
+                resolved_name = self._resolve_plugin_name(h, star_map)
+                if not include_self and self_name and resolved_name == self_name:
+                    self_handler_count += 1
+                    continue
                 et_name = getattr(getattr(h, "event_type", None), "name", "Unknown")
             except Exception:
                 et_name = "Unknown"
-            by_event.setdefault(et_name, []).append(h)
+                resolved_name = "?"
+            by_event.setdefault(et_name, []).append((h, resolved_name))
             total += 1
 
         groups = []
         all_conflicts = []
 
-        for et_name, handlers in by_event.items():
+        for et_name, items in by_event.items():
             label = self._HOOK_NAMES.get(et_name, et_name)
             is_shared_obj = et_name in self._SHARED_OBJ_HOOKS
             handler_infos = []
             plugins_involved = set()
 
-            for h in handlers:
+            for h, plugin_name in items:
                 try:
-                    plugin_name = self._resolve_plugin_name(h, star_map)
                     reserved = self._resolve_plugin_reserved(h, star_map)
                     plugins_involved.add(plugin_name)
                     body = self._read_handler_body(h)  # 只读函数体，修误报
@@ -546,6 +613,9 @@ class PluginMixin:
             "conflict_count": len(all_conflicts),
             "high_risk_count": sum(1 for c in all_conflicts if c.get("severity") == "high"),
             "runtime_tracked": list(self._hook_runtime_log.keys()),
+            "self_plugin": self_name,
+            "self_handler_count": self_handler_count,
+            "include_self": include_self,
         }
 
     async def get_plugin_detail(self) -> dict:

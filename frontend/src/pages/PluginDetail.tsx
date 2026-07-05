@@ -93,6 +93,9 @@ interface HooksReport {
   conflict_count?: number;
   high_risk_count?: number;
   runtime_tracked?: string[];
+  self_plugin?: string;
+  self_handler_count?: number;
+  include_self?: boolean;
   error?: string;
 }
 
@@ -323,12 +326,19 @@ function HookGroupCard({ group }: { group: HookGroup }) {
 
 export default function PluginDetail() {
   const { data, loading, error } = useApi<PluginData>('/plugin');
+  // 钩子区块独立拉取，便于“显示本插件钩子”开关切换 include_self 参数
+  const [showSelfHooks, setShowSelfHooks] = useState(false);
+  const { data: hooksData } = useApi<HooksReport>(
+    '/hooks',
+    showSelfHooks ? { include_self: true } : undefined
+  );
 
   const plugins = data?.plugins ?? [];
   const alerts = data?.security_alerts ?? [];
   const conflicts = data?.conflicts ?? [];
   const audit = data?.lifecycle_log ?? [];
-  const hooks = data?.hooks;
+  // 钩子数据优先用独立 /hooks 拉取结果（支持 include_self 切换），回退到 /plugin 内嵌
+  const hooks = hooksData ?? data?.hooks;
   const total = data?.total ?? plugins.length;
   const active = data?.active ?? plugins.filter((p) => p.activated).length;
   const inactive = data?.inactive ?? plugins.filter((p) => !p.activated).length;
@@ -534,11 +544,29 @@ export default function PluginDetail() {
           )}
 
           {/* 钩子全景与冲突 */}
-          <h2 className="section-title">🪝 钩子全景与冲突</h2>
+          <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <span>🪝 钩子全景与冲突</span>
+            <label style={{ fontSize: '0.85em', fontWeight: 'normal', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={showSelfHooks}
+                onChange={(e) => setShowSelfHooks(e.target.checked)}
+              />
+              显示本插件钩子
+              {(hooks?.self_handler_count ?? 0) > 0 && !showSelfHooks && (
+                <span className="text-muted" style={{ marginLeft: 4 }}>
+                  （已隐藏 {hooks?.self_handler_count} 个）
+                </span>
+              )}
+            </label>
+          </h2>
           <p className="page-subtitle" style={{ marginBottom: 12 }}>
             AstrBot 所有 <code>@filter.on_xxx()</code> 钩子按优先级串行执行；
             <strong className="severity-high">高危</strong>仅标注运行时实证（真的发生过终止/覆盖），
             <strong className="severity-medium">中低</strong>为静态潜在风险。
+            {!showSelfHooks && (hooks?.self_handler_count ?? 0) > 0 && (
+              <span className="text-muted"> 本插件的诊断钩子默认隐藏（属观测工具，非被分析对象）。</span>
+            )}
           </p>
 
           {hooks?.error ? (

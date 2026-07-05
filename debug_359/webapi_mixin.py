@@ -170,7 +170,9 @@ class WebApiMixin:
         """钩子全景图与冲突检测。"""
         from quart import jsonify
         try:
-            return jsonify(self.scan_hooks())
+            from quart import request
+            include_self = request.args.get("include_self", "false").lower() in ("1", "true", "yes")
+            return jsonify(self.scan_hooks(include_self=include_self))
         except Exception as e:
             return jsonify({"error": str(e), "groups": [], "conflicts": []})
 
