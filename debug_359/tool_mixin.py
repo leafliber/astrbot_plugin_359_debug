@@ -22,7 +22,7 @@ class ToolMixin:
     @filter.on_using_llm_tool()
     async def _tl_on_tool_start(self, event: AstrMessageEvent, tool, tool_args) -> None:
         """工具调用开始 → 记录起点。"""
-        self._hb("_tl_on_tool_start")
+        self._hb("_tl_on_tool_start", event=event, event_type="OnCallingFuncToolEvent")
         if not self.is_enabled("tool_analysis"):
             return
         try:
@@ -35,7 +35,7 @@ class ToolMixin:
     @filter.on_llm_tool_respond()
     async def _tl_on_tool_end(self, event: AstrMessageEvent, tool, tool_args, tool_result) -> None:
         """工具调用结束 → 记录 名/参/返回/耗时/成功失败。"""
-        self._hb("_tl_on_tool_end")
+        self._hb("_tl_on_tool_end", event=event, event_type="OnLLMToolRespondEvent")
         if not self.is_enabled("tool_analysis"):
             return
         try:
@@ -71,7 +71,7 @@ class ToolMixin:
     @filter.on_agent_begin()
     async def _tl_on_agent_begin(self, event: AstrMessageEvent, run_context) -> None:
         """Agent 开始 → 初始化轨迹追踪。"""
-        self._hb("_tl_on_agent_begin")
+        self._hb("_tl_on_agent_begin", event=event, event_type="OnAgentBeginEvent")
         if not self.is_enabled("tool_analysis"):
             return
         try:
@@ -89,7 +89,7 @@ class ToolMixin:
     @filter.on_agent_done()
     async def _tl_on_agent_done(self, event: AstrMessageEvent, run_context, resp) -> None:
         """Agent 完成 → 记录轨迹。"""
-        self._hb("_tl_on_agent_done")
+        self._hb("_tl_on_agent_done", event=event, event_type="OnAgentDoneEvent")
         if not self.is_enabled("tool_analysis"):
             return
         try:

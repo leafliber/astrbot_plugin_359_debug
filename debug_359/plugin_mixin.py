@@ -51,6 +51,7 @@ class PluginMixin:
     async def _pl_on_unloaded(self, metadata) -> None:
         """插件卸载审计。"""
         self._hb("_pl_on_unloaded")
+        # on_plugin_unloaded 钩子无 event 参数，无法记录 stop 状态
         if not self.is_enabled("plugin_analysis"):
             return
         try:

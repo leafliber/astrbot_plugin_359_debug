@@ -75,13 +75,33 @@ class StoreMixin:
         self._hook_heartbeat: dict[str, dict] = {}
         logger.debug("[359debug] StoreMixin 已初始化")
 
-    def _hb(self, method_name: str, err: str | None = None) -> None:
-        """记录钩子心跳。在钩子方法入口调用。"""
-        entry = self._hook_heartbeat.setdefault(method_name, {"calls": 0, "last_ts": 0.0, "last_err": None})
+    def _hb(
+        self,
+        method_name: str,
+        err: str | None = None,
+        *,
+        event=None,
+        event_type: str | None = None,
+    ) -> None:
+        """记录钩子心跳。在钩子方法入口调用。
+
+        当传入 event + event_type 时，同时记录运行时实证数据
+        （供插件冲突检测使用），等效于 _record_hook_runtime()。
+        """
+        entry = self._hook_heartbeat.setdefault(
+            method_name, {"calls": 0, "last_ts": 0.0, "last_err": None}
+        )
         entry["calls"] += 1
         entry["last_ts"] = time.time()
         if err:
             entry["last_err"] = err
+        # 自动记录运行时实证（插件冲突检测依赖此数据）
+        if event is not None and event_type:
+            try:
+                stopped = bool(event.is_stopped())
+                self._record_hook_runtime(event_type, stopped, [])
+            except Exception:
+                pass
 
     def diagnose_hooks(self) -> dict:
         """

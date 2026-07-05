@@ -22,7 +22,7 @@ class RuntimeMixin:
     @filter.on_waiting_llm_request()
     async def _rt_on_wait(self, event: AstrMessageEvent) -> None:
         """LLM 链路起点（等锁前）。"""
-        self._hb("_rt_on_wait")
+        self._hb("_rt_on_wait", event=event, event_type="OnWaitingLLMRequestEvent")
         if not self.is_enabled("runtime_analysis"):
             return
         eid = id(event)
@@ -37,7 +37,7 @@ class RuntimeMixin:
     @filter.on_llm_request()
     async def _rt_on_req(self, event: AstrMessageEvent, req) -> None:
         """LLM 请求发出。"""
-        self._hb("_rt_on_req")
+        self._hb("_rt_on_req", event=event, event_type="OnLLMRequestEvent")
         if not self.is_enabled("runtime_analysis"):
             return
         eid = id(event)
@@ -52,7 +52,7 @@ class RuntimeMixin:
     @filter.on_llm_response()
     async def _rt_on_resp(self, event: AstrMessageEvent, resp) -> None:
         """LLM 响应到达。"""
-        self._hb("_rt_on_resp")
+        self._hb("_rt_on_resp", event=event, event_type="OnLLMResponseEvent")
         if not self.is_enabled("runtime_analysis"):
             return
         eid = id(event)
@@ -81,7 +81,7 @@ class RuntimeMixin:
     @filter.after_message_sent()
     async def _rt_on_sent(self, event: AstrMessageEvent) -> None:
         """消息发送完成 → 算总耗时并清理。"""
-        self._hb("_rt_on_sent")
+        self._hb("_rt_on_sent", event=event, event_type="OnAfterMessageSentEvent")
         if not self.is_enabled("runtime_analysis"):
             return
         eid = id(event)

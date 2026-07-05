@@ -22,7 +22,7 @@ class TokenMixin:
     @filter.on_llm_response()
     async def _tk_on_resp(self, event: AstrMessageEvent, resp) -> None:
         """LLM 响应 → 读 usage 自采（作 ProviderStat 的 fallback/实时校验）。"""
-        self._hb("_tk_on_resp")
+        self._hb("_tk_on_resp", event=event, event_type="OnLLMResponseEvent")
         if not self.is_enabled("token_analysis"):
             return
         if getattr(resp, "is_chunk", False):

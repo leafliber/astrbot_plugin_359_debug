@@ -26,7 +26,7 @@ class ContextMixin:
         重要：head 钩子也调用 record_context()，确保即使 tail 钩子
         因 event.stop_event() 被跳过，上下文数据仍然有记录。
         """
-        self._hb("_ctx_on_req_head")
+        self._hb("_ctx_on_req_head", event=event, event_type="OnLLMRequestEvent")
         if not self.is_enabled("context_dump"):
             return
         try:
@@ -47,7 +47,7 @@ class ContextMixin:
     @filter.on_llm_request(priority=-100000)
     async def _ctx_on_req_tail(self, event: AstrMessageEvent, req) -> None:
         """tail：其他插件修改后，用最终状态更新快照。"""
-        self._hb("_ctx_on_req_tail")
+        self._hb("_ctx_on_req_tail", event=event, event_type="OnLLMRequestEvent")
         if not self.is_enabled("context_dump"):
             return
         try:
@@ -221,7 +221,7 @@ class ContextMixin:
     @filter.on_decorating_result()
     async def _ctx_on_decorating(self, event: AstrMessageEvent) -> None:
         """F3: 追踪 LLM 原始输出 → 最终发送之间的消息链变换。"""
-        self._hb("_ctx_on_decorating")
+        self._hb("_ctx_on_decorating", event=event, event_type="OnDecoratingResultEvent")
         if not self.is_enabled("context_dump"):
             return
         try:

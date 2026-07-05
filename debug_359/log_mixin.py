@@ -24,7 +24,7 @@ class LogMixin:
     async def _lg_on_plugin_error(self, event: AstrMessageEvent, plugin_name: str,
                                   handler_name: str, error: str, traceback_text: str) -> None:
         """插件运行时异常 → 实时捕获（无需读文件）。"""
-        self._hb("_lg_on_plugin_error")
+        self._hb("_lg_on_plugin_error", event=event, event_type="OnPluginErrorEvent")
         if not self.is_enabled("log_analysis"):
             return
         try:
