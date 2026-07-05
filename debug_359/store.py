@@ -11,6 +11,7 @@ import json
 import os
 import time
 from collections import deque
+from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from astrbot.api import logger
@@ -448,12 +449,12 @@ class StoreMixin:
 
         按可靠性依次尝试三种方案：
         1. 从 logging 的 FileHandler 获取实际写入路径（最准确）
-        2. 使用 AstrBot 官方 get_astrbot_data_path() 解析
+        2. 使用 StarTools.get_data_dir() 推导 AstrBot 数据根目录
         3. 最终回退到 cwd/data/logs/astrbot.log
 
         AstrBot 的日志路径解析逻辑：
-          get_astrbot_data_path() = <ASTRBOT_ROOT 或 cwd>/data
-          完整路径 = get_astrbot_data_path() / log_file_path
+          data_root = <ASTRBOT_ROOT 或 cwd>/data
+          完整路径 = data_root / log_file_path
           (如配置 "logs/astrbot.log" → <cwd>/data/logs/astrbot.log)
         """
         import logging
@@ -477,16 +478,21 @@ class StoreMixin:
         except Exception:
             pass
 
-        # 方案2：使用 AstrBot 官方路径解析
+        # 方案2：通过 StarTools.get_data_dir() 推导数据根目录
+        # get_data_dir() 返回 data/plugin_data/{plugin_name}/
+        # 向上两级即为 AstrBot 数据根目录 data/
         try:
-            from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+            from astrbot.api.star import StarTools
+            plugin_data_dir = StarTools.get_data_dir()
+            # data/plugin_data/{name} → data/
+            data_root = Path(plugin_data_dir).parent.parent
             try:
                 rel = self.context.get_config().get("log_file_path", "logs/astrbot.log")
             except Exception:
                 rel = "logs/astrbot.log"
             if os.path.isabs(rel):
                 return rel
-            return os.path.join(get_astrbot_data_path(), rel)
+            return str(data_root / rel)
         except Exception:
             pass
 
