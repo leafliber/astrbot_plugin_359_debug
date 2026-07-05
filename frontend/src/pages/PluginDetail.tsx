@@ -92,6 +92,9 @@ interface HooksReport {
   conflicts?: HookConflict[];
   conflict_count?: number;
   high_risk_count?: number;
+  medium_count?: number;
+  low_count?: number;
+  info_count?: number;
   runtime_tracked?: string[];
   self_plugin?: string;
   self_handler_count?: number;
@@ -131,6 +134,7 @@ const severityClass = (sev: string | undefined): string => {
   const s = (sev || '').toLowerCase();
   if (['critical', 'high'].includes(s)) return 'severity-high';
   if (['medium'].includes(s)) return 'severity-medium';
+  if (['info'].includes(s)) return 'severity-info';
   return 'severity-low';
 };
 
@@ -176,12 +180,14 @@ function HookGroupCard({ group }: { group: HookGroup }) {
   const headClass =
     risk === 'high' ? 'severity-high' :
     risk === 'medium' ? 'severity-medium' :
-    risk === 'low' ? 'severity-low' : '';
+    risk === 'low' ? 'severity-low' :
+    risk === 'info' ? 'severity-info' : '';
 
   const riskLabel =
     risk === 'high' ? '高危' :
     risk === 'medium' ? '中危' :
-    risk === 'low' ? '低危' : '正常';
+    risk === 'low' ? '低危' :
+    risk === 'info' ? '潜在' : '正常';
 
   const pluginSet = new Set<string>();
   handlers.forEach((h) => { if (h.plugin) pluginSet.add(h.plugin); });
@@ -235,7 +241,11 @@ function HookGroupCard({ group }: { group: HookGroup }) {
                 <div key={i} style={{
                   padding: '6px 10px', marginBottom: 4, borderRadius: 4,
                   background: 'var(--bg-elevated, rgba(0,0,0,0.03))',
-                  borderLeft: `3px solid ${c.severity === 'high' ? 'var(--error)' : c.severity === 'medium' ? 'var(--warning, #f0ad4e)' : 'var(--border)'}`,
+                  borderLeft: `3px solid ${
+                    c.severity === 'high' ? 'var(--error)' :
+                    c.severity === 'medium' ? 'var(--warning, #f0ad4e)' :
+                    c.severity === 'info' ? '#3b82f6' : 'var(--border)'
+                  }`,
                   fontSize: '0.88em',
                 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -347,6 +357,9 @@ export default function PluginDetail() {
   const highAlerts = data?.high_alert_count ?? alerts.filter((a) => a.severity === 'high').length;
   const hookConflicts = hooks?.conflicts ?? [];
   const hookHighRisk = hooks?.high_risk_count ?? 0;
+  const hookMedium = hooks?.medium_count ?? 0;
+  const hookLow = hooks?.low_count ?? 0;
+  const hookInfo = hooks?.info_count ?? 0;
 
   return (
     <div>
@@ -565,7 +578,9 @@ export default function PluginDetail() {
           <p className="page-subtitle" style={{ marginBottom: 12 }}>
             AstrBot 所有 <code>@filter.on_xxx()</code> 钩子按优先级串行执行；
             <strong className="severity-high">高危</strong>仅标注运行时实证（真的发生过终止/覆盖），
-            <strong className="severity-medium">中低</strong>为静态潜在风险。
+            <strong className="severity-medium">中危</strong>为静态扫描发现具体风险代码，
+            <strong className="severity-low">低危</strong>为较轻的覆盖风险，
+            <strong className="severity-info">潜在</strong>（蓝色）为多插件共用钩子等普遍现象，仅作提示。
             {!showSelfHooks && (hooks?.self_handler_count ?? 0) > 0 && (
               <span className="text-muted"> 本插件的诊断钩子默认隐藏（属观测工具，非被分析对象）。</span>
             )}
@@ -585,6 +600,9 @@ export default function PluginDetail() {
                 <span><strong>{hooks?.total_event_types ?? 0}</strong> 类事件</span>
                 <span className="severity-medium"><strong>{hookConflicts.length}</strong> 条告警</span>
                 <span className="severity-high"><strong>{hookHighRisk}</strong> 高危</span>
+                {hookMedium > 0 && <span className="severity-medium"><strong>{hookMedium}</strong> 中危</span>}
+                {hookLow > 0 && <span className="severity-low"><strong>{hookLow}</strong> 低危</span>}
+                {hookInfo > 0 && <span className="severity-info"><strong>{hookInfo}</strong> 潜在</span>}
                 {(hooks?.runtime_tracked?.length ?? 0) > 0 && (
                   <span className="text-muted">运行时观测：{hooks?.runtime_tracked?.length} 类</span>
                 )}

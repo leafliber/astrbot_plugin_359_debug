@@ -399,12 +399,13 @@ class PluginMixin:
                 desc = base + "，共享可变对象，存在潜在覆盖风险"
             else:
                 desc = base + "，执行顺序由优先级/加载顺序决定"
-            # 纯静态潜在风险统一为 low；仅当有运行时 stop 实证时才升级
-            # （共享对象 + 实际 stop → high；非共享 + 实际 stop → medium）
+            # 共用钩子是 AstrBot 插件生态的普遍现象，纯静态时归为 info（潜在）
+            # 仅当有运行时 stop 实证时才升级：
+            #   共享对象 + 实际 stop → high；非共享 + 实际 stop → medium
             if has_rt and rt_stopped > 0:
                 sev = "high" if is_shared_obj else "medium"
             else:
-                sev = "low"
+                sev = "info"
             conflicts.append({
                 "type": "multi_handler",
                 "severity": sev,
@@ -494,9 +495,11 @@ class PluginMixin:
     def scan_hooks(self, include_self: bool = False) -> dict:
         """钩子全景图 + 冲突检测。
 
-        评级原则：
-          - static + 潜在风险 → info / low / medium（看是否共享对象钩子）
-          - 只有 runtime_evidence（真的发生过 stop）才评 high
+        评级原则（4 级）：
+          - high（高危）：运行时实证 — 真的发生过 stop_event 终止
+          - medium（中危）：静态扫描发现 stop_event/覆盖赋值等具体风险代码
+          - low（低危）：较轻的静态风险（如 set_result 覆盖）
+          - info（潜在/蓝色）：共用钩子等普遍现象，仅作提示，不算危险
         运行时数据由本插件自身注册的全套钩子上报，零侵入其它插件。
 
         Args:
@@ -613,6 +616,9 @@ class PluginMixin:
             "conflicts": all_conflicts,
             "conflict_count": len(all_conflicts),
             "high_risk_count": sum(1 for c in all_conflicts if c.get("severity") == "high"),
+            "medium_count": sum(1 for c in all_conflicts if c.get("severity") == "medium"),
+            "low_count": sum(1 for c in all_conflicts if c.get("severity") == "low"),
+            "info_count": sum(1 for c in all_conflicts if c.get("severity") == "info"),
             "runtime_tracked": list(self._hook_runtime_log.keys()),
             "self_plugin": self_name,
             "self_handler_count": self_handler_count,

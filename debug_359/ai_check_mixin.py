@@ -139,12 +139,16 @@ class AiCheckMixin:
             '  "overall_score": 85,\n'
             '  "highlights": ["做得好的方面1", "做得好的方面2"],\n'
             '  "risks": [\n'
-            '    {"module": "模块名", "level": "high/medium/low", '
+            '    {"module": "模块名", "level": "high/medium/low/info", '
             '"issue": "问题描述", "advice": "改进建议"}\n'
             "  ],\n"
             '  "summary": "总结性建议（1-2句话）"\n'
             "}\n\n"
             "评分标准：90+优秀，75-89良好，60-74需关注，<60需修复。\n"
+            "等级说明：high=高危（需立即处理）、medium=中危（建议处理）、"
+            "low=低危（可优化）、info=潜在（仅提示，普遍现象不算危险）。\n"
+            "对于 level=info 的项（如多插件共用钩子），在 advice 中说明这是 "
+            "AstrBot 插件生态的普遍现象，通常无需处理。\n"
             "请基于实际数据分析，不要凭空臆测。如果数据不足，如实说明。"
         )
 
@@ -235,6 +239,9 @@ class AiCheckMixin:
                 hook_groups = hooks.get("groups", [])
                 hook_conflicts = hooks.get("conflicts", [])
                 hook_high = hooks.get("high_risk_count", 0)
+                hook_medium = hooks.get("medium_count", 0)
+                hook_low = hooks.get("low_count", 0)
+                hook_info = hooks.get("info_count", 0)
                 # 提取关键钩子冲突摘要（最多 5 条，按 severity 排序）
                 key_hook_issues = []
                 for hc in hook_conflicts[:5]:
@@ -246,7 +253,8 @@ class AiCheckMixin:
                     f"已注册钩子：{hooks.get('total_handlers', 0)} 个 / "
                     f"{hooks.get('total_event_types', 0)} 类事件，"
                     f"钩子冲突：{hooks.get('conflict_count', 0)} 条"
-                    f"（高危 {hook_high}）"
+                    f"（高危 {hook_high}，中危 {hook_medium}，"
+                    f"低危 {hook_low}，潜在 {hook_info}）"
                 )
                 hook_detail = "\n".join(key_hook_issues) if key_hook_issues else "无"
                 # 多插件监听的高风险钩子（共享对象）

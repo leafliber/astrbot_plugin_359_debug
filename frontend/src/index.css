@@ -1185,6 +1185,7 @@ table.data-table .cell-error  { color: var(--color-error); }
 .severity-high     { color: var(--severity-high-color); font-weight: 600; }
 .severity-medium   { color: var(--color-warning); font-weight: 600; }
 .severity-low      { color: var(--text-secondary); }
+.severity-info     { color: #3b82f6; font-weight: 600; }
 
 /* 滚动条 */
 ::-webkit-scrollbar {

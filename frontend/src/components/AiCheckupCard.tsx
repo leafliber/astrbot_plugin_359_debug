@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 /** 单个风险项 */
 export interface CheckupRisk {
   module: string;
-  level: 'high' | 'medium' | 'low';
+  level: 'high' | 'medium' | 'low' | 'info';
   issue: string;
   advice: string;
 }
@@ -41,12 +41,14 @@ const LEVEL_LABEL: Record<string, string> = {
   high: '高危',
   medium: '中危',
   low: '低危',
+  info: '潜在',
 };
 
 const LEVEL_COLOR: Record<string, string> = {
   high: 'var(--color-error)',
   medium: 'var(--color-warning)',
   low: 'var(--color-primary)',
+  info: '#3b82f6',
 };
 
 function scoreColor(score: number): string {
