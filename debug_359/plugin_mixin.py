@@ -561,15 +561,17 @@ class PluginMixin:
             )
 
             # 组 risk_level：取本组 conflicts 最高 severity
-            sev_rank = {"high": 3, "medium": 2, "low": 1, "info": 0}
-            group_risk = max(
-                (sev_rank.get(c.get("severity", "info"), 0) for c in conflicts),
-                default=0,
-            )
-            risk_level = next(
-                (k for k, v in sev_rank.items() if v == group_risk),
-                "info",
-            )
+            sev_rank = {"high": 3, "medium": 2, "low": 1, "info": 0, "normal": -1}
+            if conflicts:
+                group_risk = max(
+                    sev_rank.get(c.get("severity", "info"), 0) for c in conflicts
+                )
+                risk_level = next(
+                    k for k, v in sev_rank.items() if v == group_risk
+                )
+            else:
+                # 无冲突 → 正常（不是 info/潜在）
+                risk_level = "normal"
 
             groups.append({
                 "event_type": et_name,
