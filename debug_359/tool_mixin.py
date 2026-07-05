@@ -19,11 +19,6 @@ from .utils import fmt_duration, health_score_from_metric, percentile, avg
 class ToolMixin:
     """工具调用分析。依赖 StoreMixin 的缓冲。"""
 
-    # 工具调用计时（id(event) -> {tool_name: start_ts}）
-    _tool_timings: dict[int, dict[str, float]] = {}
-    # Agent 轨迹临时存储（id(event) -> {begin, tool_seq, ...}）
-    _agent_temp: dict[int, dict] = {}
-
     @filter.on_using_llm_tool()
     async def _tl_on_tool_start(self, event: AstrMessageEvent, tool, tool_args) -> None:
         """工具调用开始 → 记录起点。"""

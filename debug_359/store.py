@@ -60,6 +60,16 @@ class StoreMixin:
         self._alert_history: deque = deque(maxlen=200)
         # 运行时阶段计时（id(event) -> {stage: ts}）
         self._timings: dict[int, dict] = {}
+        # 工具调用计时（id(event) -> {tool_name: start_ts}）
+        self._tool_timings: dict[int, dict[str, float]] = {}
+        # Agent 轨迹临时存储（id(event) -> {begin, tool_seq, ...}）
+        self._agent_temp: dict[int, dict] = {}
+        # 生命周期审计日志
+        self._lifecycle_log: deque = deque(maxlen=100)
+        # 钩子运行时观测（hook_key -> {calls, stopped, last_order}）
+        self._hook_runtime_log: dict = {}
+        # 本插件名缓存（延迟解析，_get_self_plugin_name 填充）
+        self._self_plugin_name_cache: str | None = None
         logger.debug("[359debug] StoreMixin 已初始化")
 
     # ==================== 配置 ====================

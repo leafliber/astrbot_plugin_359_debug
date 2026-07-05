@@ -76,3 +76,33 @@ class Main(
         """插件卸载。"""
         await self.save_buf_to_kv()
         logger.info("[359debug] 已卸载，统计数据已持久化。")
+
+
+# === AstrBot Mixin 钩子模块路径修复 ==========================================
+# 问题：Mixin 文件中用 @filter 注册的钩子，其 handler.__module__ 指向 Mixin 模块
+# （如 data.plugins.xxx.debug_359.runtime_mixin），而非主模块（main）。
+# AstrBot 的 get_handlers_by_event_type() 通过 star_map[handler_module_path]
+# 查找插件激活状态 —— Mixin 模块路径不在 star_map 中，导致全部钩子被跳过。
+# 同理 get_handlers_by_module_name() 用精确匹配做 self 绑定，也找不到 Mixin 钩子。
+#
+# 修复：模块导入完成（所有 Mixin 的 @filter 已注册）后，将本插件包前缀下
+# 所有 handler 的 handler_module_path 统一为主模块路径。
+# 时机：此类定义之后、star_manager 处理之前（仍在模块级导入阶段）。
+try:
+    from astrbot.core.star.star_handler import star_handlers_registry as _shr
+
+    _main_mod = Main.__module__
+    _pkg_prefix = _main_mod.rsplit(".", 1)[0] + "."
+    _patched = 0
+    for _h in list(_shr):
+        if (
+            _h.handler_module_path.startswith(_pkg_prefix)
+            and _h.handler_module_path != _main_mod
+        ):
+            _h.handler_module_path = _main_mod
+            _patched += 1
+    if _patched:
+        logger.debug(f"[359debug] 已修复 {_patched} 个 Mixin 钩子的模块路径")
+except Exception as _e:
+    logger.warning(f"[359debug] Mixin 钩子模块路径修复失败: {_e}")
+# === end fix =================================================================

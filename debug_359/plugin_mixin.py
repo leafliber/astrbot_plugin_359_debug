@@ -21,9 +21,6 @@ from .utils import health_score_from_metric
 class PluginMixin:
     """插件分析（安全/冲突）。依赖 StoreMixin 的 DB 查询。"""
 
-    # 生命周期审计日志
-    _lifecycle_log: deque = deque(maxlen=100)
-
     # 安全扫描正则模式
     SECURITY_PATTERNS = {
         "eval/exec": r"\b(eval|exec)\s*\(",
@@ -182,7 +179,7 @@ class PluginMixin:
 
     # 运行时观测缓冲：记录自身钩子真实见到的事件
     # 结构: { event_type_name: { "calls": N, "stopped": M, "last_order": [...] } }
-    _hook_runtime_log: dict = {}
+    # （实例变量，在 StoreMixin.__init__ 中初始化）
 
     def _get_star_registry(self):
         """安全获取全局 star_handlers_registry 单例。"""
@@ -208,8 +205,6 @@ class PluginMixin:
             return star_registry or []
         except Exception:
             return []
-
-    _self_plugin_name_cache: str | None = None
 
     def _get_self_plugin_name(self) -> str | None:
         """识别本插件（诊断工具自身）的插件名。
