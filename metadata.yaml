@@ -1,6 +1,6 @@
 name: astrbot_plugin_359_debug
-desc: 359°健康体检：一键AI智能诊断运行时性能、Token 用量、上下文、工具调用、日志、插件冲突与会话锁死锁风险，附带可视化Dashboard"
+desc: 一键AI智能诊断运行时性能、Token 用量、上下文、工具调用、日志、插件冲突与会话锁死锁风险，附带可视化Dashboard"
 version: 0.1.0
 author: Leafiber
 repo: https://github.com/leafliber/astrbot_plugin_359_debug
-display_name: 359健康体检
+display_name: 359健康助手
