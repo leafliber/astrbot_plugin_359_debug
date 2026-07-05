@@ -97,6 +97,7 @@ interface HooksReport {
   medium_count?: number;
   low_count?: number;
   info_count?: number;
+  normal_group_count?: number;
   runtime_tracked?: string[];
   self_plugin?: string;
   self_handler_count?: number;
@@ -161,13 +162,14 @@ function HookGroupCard({ group }: { group: HookGroup }) {
   const risk = group.risk_level ?? 'info';
   const runtime = group.runtime;
   const hasRuntimeEvidence = runtime?.has_evidence;
+  const hasConflicts = conflicts.length > 0;
 
   // 头部严重级别样式
   const headClass =
     risk === 'high' ? 'severity-high' :
     risk === 'medium' ? 'severity-medium' :
     risk === 'low' ? 'severity-low' :
-    risk === 'info' ? 'severity-info' : '';
+    risk === 'info' ? 'severity-info' : 'severity-ok';
 
   const riskLabel =
     risk === 'high' ? '高危' :
@@ -192,7 +194,7 @@ function HookGroupCard({ group }: { group: HookGroup }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ width: 10, fontSize: '0.8em', color: 'var(--text-muted)' }}>{open ? '▼' : '▶'}</span>
           <strong>{group.label ?? group.event_type}</strong>
-          <span className={`tag ${risk === 'high' || risk === 'medium' ? 'inactive' : 'active'}`} >
+          <span className={`tag ${hasConflicts ? (risk === 'high' || risk === 'medium' ? 'inactive' : 'active') : 'tag-ok'}`} >
             {riskLabel}
           </span>
           {group.shared_obj && (
@@ -404,54 +406,6 @@ export default function PluginDetail() {
             </div>
           )}
 
-          {/* 插件列表 */}
-          <h2 className="section-title">插件列表</h2>
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>名称</th>
-                  <th>版本</th>
-                  <th>作者</th>
-                  <th>状态</th>
-                  <th>保留</th>
-                  <th>仓库</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plugins.map((p, i) => (
-                  <tr key={i}>
-                    <td>{p.name ?? '-'}</td>
-                    <td>{p.version ?? '-'}</td>
-                    <td>{p.author ?? '-'}</td>
-                    <td>
-                      <span className={'tag ' + (p.activated ? 'active' : 'inactive')}>
-                        {p.activated ? '已激活' : '未激活'}
-                      </span>
-                    </td>
-                    <td>{p.reserved ? '是' : '否'}</td>
-                    <td>
-                      {p.repo ? (
-                        <a href={p.repo} target="_blank" rel="noreferrer">
-                          {p.repo}
-                        </a>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {plugins.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                      暂无插件
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
           {/* 安全告警 */}
           <h2 className="section-title">安全告警</h2>
           <div className="table-wrapper">
@@ -573,11 +527,16 @@ export default function PluginDetail() {
               <div className="card" style={{ marginBottom: 12, padding: '10px 14px', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span><strong>{hooks?.total_handlers ?? 0}</strong> 个处理器</span>
                 <span><strong>{hooks?.total_event_types ?? 0}</strong> 类事件</span>
-                <span className="severity-medium"><strong>{hookConflicts.length}</strong> 条告警</span>
                 <span className="severity-high"><strong>{hookHighRisk}</strong> 高危</span>
                 {hookMedium > 0 && <span className="severity-medium"><strong>{hookMedium}</strong> 中危</span>}
                 {hookLow > 0 && <span className="severity-low"><strong>{hookLow}</strong> 低危</span>}
                 {hookInfo > 0 && <span className="severity-info"><strong>{hookInfo}</strong> 潜在</span>}
+                {hookConflicts.length === 0 && (
+                  <span className="severity-ok"><strong>✓ 无冲突</strong></span>
+                )}
+                {(hooks?.normal_group_count ?? 0) > 0 && (
+                  <span className="severity-ok"><strong>{hooks?.normal_group_count}</strong> 正常</span>
+                )}
                 {(hooks?.runtime_tracked?.length ?? 0) > 0 && (
                   <span className="text-muted">运行时观测：{hooks?.runtime_tracked?.length} 类</span>
                 )}
@@ -630,6 +589,54 @@ export default function PluginDetail() {
                   <tr>
                     <td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无审计记录
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 插件列表（置后：参考性信息） */}
+          <h2 className="section-title">插件列表</h2>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th>版本</th>
+                  <th>作者</th>
+                  <th>状态</th>
+                  <th>保留</th>
+                  <th>仓库</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plugins.map((p, i) => (
+                  <tr key={i}>
+                    <td>{p.name ?? '-'}</td>
+                    <td>{p.version ?? '-'}</td>
+                    <td>{p.author ?? '-'}</td>
+                    <td>
+                      <span className={'tag ' + (p.activated ? 'active' : 'inactive')}>
+                        {p.activated ? '已激活' : '未激活'}
+                      </span>
+                    </td>
+                    <td>{p.reserved ? '是' : '否'}</td>
+                    <td>
+                      {p.repo ? (
+                        <a href={p.repo} target="_blank" rel="noreferrer">
+                          {p.repo}
+                        </a>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {plugins.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                      暂无插件
                     </td>
                   </tr>
                 )}

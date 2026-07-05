@@ -39,6 +39,9 @@ class WebApiMixin:
             ("/theme", self._api_get_theme, ["GET"], "读取主题"),
             ("/theme", self._api_save_theme, ["POST"], "保存主题"),
             ("/scan", self._api_scan, ["POST"], "手动触发扫描"),
+            ("/storage_status", self._api_storage_status, ["GET"], "持久化存储状态"),
+            ("/save_cache", self._api_save_cache, ["POST"], "手动保存所有缓冲到KV"),
+            ("/clear_cache", self._api_clear_cache, ["POST"], "清理持久化数据"),
             ("/ai_provider", self._api_ai_provider, ["GET"], "查询默认AI Provider"),
             ("/ai_checkup", self._api_ai_checkup, ["POST"], "AI智能体检"),
             ("/live", self._api_live, ["GET"], "实时告警SSE"),
@@ -221,6 +224,38 @@ class WebApiMixin:
             return jsonify({"error": f"未知扫描类型: {scan_type}"})
         except Exception as e:
             return jsonify({"error": str(e)})
+
+    async def _api_storage_status(self) -> Any:
+        """持久化存储状态：列出每个 key 的当前内存数据量。"""
+        from quart import jsonify
+        return jsonify({
+            "keys": self.get_persisted_keys_status(),
+            "total_keys": len(self.PERSIST_KEYS),
+            "plugin_id": getattr(self, "plugin_id", None),
+        })
+
+    async def _api_save_cache(self) -> Any:
+        """手动保存所有缓冲到 KV。"""
+        from quart import jsonify
+        try:
+            await self.save_all_bufs_to_kv()
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)})
+
+    async def _api_clear_cache(self) -> Any:
+        """清理持久化数据。请求体：{"keys": [...]} 或 {"keys": null} 表示全清。"""
+        from quart import jsonify, request
+        try:
+            body = await request.get_json() if request.content_length else {}
+            keys = body.get("keys") if body else None
+            if keys is not None and not isinstance(keys, list):
+                return jsonify({"ok": False, "error": "keys 必须是数组或 null"})
+            result = await self.clear_persisted_cache(keys=keys)
+            return jsonify({"ok": True, "result": result})
+        except Exception as e:
+            logger.warning(f"[359debug] clear_cache 异常: {e}")
+            return jsonify({"ok": False, "error": str(e)})
 
     async def _api_ai_provider(self) -> Any:
         """查询当前默认 AI Provider（用于按钮下方小字展示）。"""

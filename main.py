@@ -69,13 +69,50 @@ class Main(
     async def initialize(self) -> None:
         """插件初始化。"""
         await self._store_initialize()
+        # 启动定时自动保存（每 60 秒一次，防止插件崩溃导致 KV 未更新）
+        try:
+            self._start_autosave_task()
+        except Exception as _e:
+            logger.warning(f"[359debug] 启动自动保存任务失败: {_e}")
         logger.info("[359debug] 359度 Debug 已就绪。发送 /debug help 查看指令，"
                     "WebUI 插件详情查看 359°体检 Dashboard。")
 
     async def terminate(self) -> None:
         """插件卸载。"""
-        await self.save_buf_to_kv()
+        # 取消自动保存任务
+        try:
+            t = getattr(self, "_autosave_task", None)
+            if t and not t.done():
+                t.cancel()
+        except Exception:
+            pass
+        # 最终保存全量缓冲到 KV
+        try:
+            await self.save_all_bufs_to_kv()
+        except Exception as e:
+            logger.warning(f"[359debug] 卸载持久化失败: {e}")
         logger.info("[359debug] 已卸载，统计数据已持久化。")
+
+    def _start_autosave_task(self) -> None:
+        """启动定时自动保存：每 60 秒把缓冲 dump 到 KV。"""
+        import asyncio as _aio
+
+        async def _autosave_loop():
+            while True:
+                try:
+                    await _aio.sleep(60)
+                    await self.save_all_bufs_to_kv()
+                except _aio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.warning(f"[359debug] 自动保存异常: {e}")
+
+        try:
+            loop = _aio.get_running_loop()
+            self._autosave_task = loop.create_task(_autosave_loop())
+            logger.info("[359debug] 自动保存任务已启动（每 60s）")
+        except RuntimeError:
+            logger.debug("[359debug] 非 async 上下文，跳过自动保存任务")
 
 
 # === AstrBot Mixin 钩子模块路径修复 ==========================================

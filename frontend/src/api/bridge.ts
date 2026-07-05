@@ -107,10 +107,12 @@ export interface ApiState<T> {
  *
  * @param endpoint 接口路径，传 null 表示不拉取
  * @param params   查询参数
+ * @param refreshMs 自动刷新间隔（毫秒），0 或不传表示不自动刷新
  */
 export function useApi<T = any>(
   endpoint: string | null,
-  params?: Record<string, any>
+  params?: Record<string, any>,
+  refreshMs?: number
 ): ApiState<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState<boolean>(!!endpoint);
@@ -133,25 +135,37 @@ export function useApi<T = any>(
     setLoading(true);
     setError(null);
 
-    apiGet(endpoint, params)
-      .then((res) => {
-        if (!cancelled) {
-          setData(res as T);
-          setLoading(false);
-        }
-      })
-      .catch((err: any) => {
-        if (!cancelled) {
-          setError(err?.message || String(err));
-          setLoading(false);
-        }
-      });
+    const fetchOnce = () =>
+      apiGet(endpoint, params)
+        .then((res) => {
+          if (!cancelled) {
+            setData(res as T);
+            setLoading(false);
+          }
+        })
+        .catch((err: any) => {
+          if (!cancelled) {
+            setError(err?.message || String(err));
+            setLoading(false);
+          }
+        });
+
+    fetchOnce();
+
+    // 自动轮询
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (refreshMs && refreshMs > 0) {
+      timer = setInterval(() => {
+        if (!cancelled) fetchOnce();
+      }, refreshMs);
+    }
 
     return () => {
       cancelled = true;
+      if (timer) clearInterval(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, paramsKey, tick]);
+  }, [endpoint, paramsKey, tick, refreshMs]);
 
   return { data, loading, error, refresh };
 }

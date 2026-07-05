@@ -393,16 +393,51 @@ class StoreMixin:
 
     # ==================== KV 持久化 ====================
 
+    # 全部插件持久化的 KV key 集中定义（决定持久化行为）
+    PERSIST_KEYS: tuple[str, ...] = (
+        "token_buf",            # Token 使用记录
+        "runtime_buf",          # 运行时阶段样本
+        "tool_buf",             # 工具调用记录
+        "context_history",      # 多轮 prompt 快照（用于缓存破坏检测）
+        "context_last",         # {umo: last_snapshot}
+        "alert_history",        # 告警事件历史
+        "log_entries",          # plugin_error 捕获
+        "agent_trajectories",   # Agent 轨迹
+        "hook_runtime_log",     # 钩子运行时实证
+    )
+
     async def save_buf_to_kv(self) -> None:
-        """将 token 统计缓冲持久化到 KV（重启不丢）。"""
+        """将 token 缓冲持久化到 KV（向后兼容）。"""
         try:
             data = list(self._token_buf)
             await self.put_kv_data("token_buf", data)
         except Exception as e:
             logger.warning(f"[359debug] KV 持久化失败: {e}")
 
+    async def save_all_bufs_to_kv(self) -> None:
+        """将所有可持久化的缓冲批量写入 KV。异常隔离：单个 key 失败不影响其他。"""
+        snapshot = {
+            "token_buf":          list(self._token_buf),
+            "runtime_buf":        list(self._runtime_buf),
+            "tool_buf":           list(self._tool_buf),
+            "context_history":    list(self._context_history),
+            "context_last":       dict(self._context_last),
+            "alert_history":      list(self._alert_history),
+            "log_entries":        list(self._log_entries),
+            "agent_trajectories": list(self._agent_trajectories),
+            "hook_runtime_log":   {k: dict(v) for k, v in self._hook_runtime_log.items()},
+        }
+        ok, failed = 0, []
+        for k, v in snapshot.items():
+            try:
+                await self.put_kv_data(k, v)
+                ok += 1
+            except Exception as e:
+                failed.append(f"{k}: {e}")
+        logger.info(f"[359debug] KV 持久化: {ok} 成功, {len(failed)} 失败 {failed}")
+
     async def load_buf_from_kv(self) -> None:
-        """从 KV 恢复 token 统计。"""
+        """从 KV 恢复 token 统计（向后兼容）。"""
         try:
             saved = await self.get_kv_data("token_buf", None)
             if isinstance(saved, list):
@@ -410,6 +445,162 @@ class StoreMixin:
                 logger.info(f"[359debug] 恢复 {len(saved)} 条 token 记录")
         except Exception as e:
             logger.warning(f"[359debug] KV 恢复失败: {e}")
+
+    async def load_all_bufs_from_kv(self) -> None:
+        """从 KV 恢复所有可持久化的缓冲。"""
+        restored = 0
+        # token_buf
+        try:
+            v = await self.get_kv_data("token_buf", None)
+            if isinstance(v, list):
+                self._token_buf.extend(v[-2000:]); restored += 1
+        except Exception as e:
+            logger.warning(f"[359debug] KV 恢复 token_buf 失败: {e}")
+        # runtime_buf
+        try:
+            v = await self.get_kv_data("runtime_buf", None)
+            if isinstance(v, list):
+                self._runtime_buf.extend(v[-500:]); restored += 1
+        except Exception as e:
+            logger.warning(f"[359debug] KV 恢复 runtime_buf 失败: {e}")
+        # tool_buf
+        try:
+            v = await self.get_kv_data("tool_buf", None)
+            if isinstance(v, list):
+                self._tool_buf.extend(v[-500:]); restored += 1
+        except Exception as e:
+            logger.warning(f"[359debug] KV 恢复 tool_buf 失败: {e}")
+        # context_history / context_last / alert_history / log_entries / agent_trajectories
+        targets = {
+            "context_history":    (self._context_history, 50),
+            "context_last":       ("dict", None),
+            "alert_history":      (self._alert_history, 200),
+            "log_entries":        (self._log_entries, 500),
+            "agent_trajectories": (self._agent_trajectories, 50),
+        }
+        for key, (target, limit) in targets.items():
+            try:
+                v = await self.get_kv_data(key, None)
+                if v is None:
+                    continue
+                if target == "dict" and isinstance(v, dict):
+                    self._context_last.update(v); restored += 1
+                elif hasattr(target, "extend") and isinstance(v, list):
+                    target.extend(v[-limit:]); restored += 1
+            except Exception as e:
+                logger.warning(f"[359debug] KV 恢复 {key} 失败: {e}")
+        # hook_runtime_log
+        try:
+            v = await self.get_kv_data("hook_runtime_log", None)
+            if isinstance(v, dict):
+                for et, slot in v.items():
+                    if isinstance(slot, dict):
+                        cur = self._hook_runtime_log.setdefault(et, {
+                            "calls": 0, "stopped": 0, "last_order": [], "last_ts": 0.0,
+                        })
+                        cur["calls"]   = max(cur["calls"],   int(slot.get("calls", 0)))
+                        cur["stopped"] = max(cur["stopped"], int(slot.get("stopped", 0)))
+                        cur["last_ts"] = max(cur["last_ts"], float(slot.get("last_ts", 0.0)))
+                restored += 1
+        except Exception as e:
+            logger.warning(f"[359debug] KV 恢复 hook_runtime_log 失败: {e}")
+        logger.info(f"[359debug] KV 批量恢复: {restored} 个缓冲区")
+
+    async def clear_persisted_cache(self, keys: list[str] | None = None) -> dict[str, bool]:
+        """一键清理持久化数据。
+
+        Args:
+            keys: 指定要清理的 key 列表；None 表示清空本插件所有 KV。
+        Returns:
+            {key: True/False} 清理结果
+        """
+        result: dict[str, bool] = {}
+
+        if keys is None:
+            # 一键全清：通过 sp 取消整个 plugin 命名空间
+            try:
+                from astrbot.core import sp
+                await sp.clear_async("plugin", self.plugin_id)
+                logger.info(f"[359debug] 已清空插件 {self.plugin_id} 的全部 KV 命名空间")
+                # 同时清空内存中的所有缓冲区
+                self._token_buf.clear()
+                self._runtime_buf.clear()
+                self._tool_buf.clear()
+                self._context_history.clear()
+                self._context_last.clear()
+                self._alert_history.clear()
+                self._log_entries.clear()
+                self._agent_trajectories.clear()
+                self._hook_runtime_log.clear()
+                return {"_all": True}
+            except Exception as e:
+                logger.error(f"[359debug] clear_persisted_cache 全清失败: {e}")
+                return {"_all": False}
+
+        # 指定 key 清理
+        buf_map = {
+            "token_buf":          self._token_buf,
+            "runtime_buf":        self._runtime_buf,
+            "tool_buf":           self._tool_buf,
+            "context_history":    self._context_history,
+            "context_last":       self._context_last,
+            "alert_history":      self._alert_history,
+            "log_entries":        self._log_entries,
+            "agent_trajectories": self._agent_trajectories,
+            "hook_runtime_log":   self._hook_runtime_log,
+        }
+        for k in keys:
+            try:
+                await self.delete_kv_data(k)
+                # 同时清空内存中的对应缓冲区
+                buf = buf_map.get(k)
+                if buf is not None:
+                    buf.clear()
+                result[k] = True
+            except Exception as e:
+                logger.warning(f"[359debug] 删除 KV {k} 失败: {e}")
+                result[k] = False
+        return result
+
+    def get_persisted_keys_status(self) -> list[dict[str, Any]]:
+        """返回每个持久化 key 的状态（用于设置页面展示）。"""
+        sizes = {
+            "token_buf":          len(self._token_buf),
+            "runtime_buf":        len(self._runtime_buf),
+            "tool_buf":           len(self._tool_buf),
+            "context_history":    len(self._context_history),
+            "context_last":       len(self._context_last),
+            "alert_history":      len(self._alert_history),
+            "log_entries":        len(self._log_entries),
+            "agent_trajectories": len(self._agent_trajectories),
+            "hook_runtime_log":   len(self._hook_runtime_log),
+        }
+        labels = {
+            "token_buf":          "Token 使用记录",
+            "runtime_buf":        "运行时阶段样本",
+            "tool_buf":           "工具调用记录",
+            "context_history":    "上下文历史快照",
+            "context_last":       "最新上下文 (per-umo)",
+            "alert_history":      "告警事件历史",
+            "log_entries":        "错误日志捕获",
+            "agent_trajectories": "Agent 轨迹",
+            "hook_runtime_log":   "钩子运行时实证",
+        }
+        modules = {
+            "token_buf":          "token",
+            "runtime_buf":        "runtime",
+            "tool_buf":           "tool",
+            "context_history":    "context",
+            "context_last":       "context",
+            "alert_history":      "alert",
+            "log_entries":        "log",
+            "agent_trajectories": "tool",
+            "hook_runtime_log":   "plugin",
+        }
+        return [
+            {"key": k, "label": labels.get(k, k), "count": sizes.get(k, 0), "module": modules.get(k, "")}
+            for k in self.PERSIST_KEYS
+        ]
 
     # ==================== SSE 事件总线 ====================
 
@@ -519,5 +710,5 @@ class StoreMixin:
     async def _store_initialize(self) -> None:
         """由子类 initialize() 调用。"""
         await self.load_config()
-        await self.load_buf_from_kv()
+        await self.load_all_bufs_from_kv()
         logger.info("[359debug] StoreMixin 就绪（配置/KV/缓冲 已加载）")
